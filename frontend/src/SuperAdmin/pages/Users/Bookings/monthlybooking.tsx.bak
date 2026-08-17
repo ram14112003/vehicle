@@ -1,0 +1,1090 @@
+
+import React, { useEffect, useMemo, useRef, useState } from "react";
+import axiosInstance from "../../../../utils/axiosInstance";
+import { showToast, AlertContainer } from "../../../../components/AlertBox";
+import { useLocation, useNavigate } from "react-router-dom";
+
+type SelectOpt = { value: string; label: string; meta?: any };
+
+type Company = {
+  companyId: string;
+  companyName: string;
+  gstNo?: string;
+  companyAddress?: string;
+  allowTax?: string | boolean;
+};
+
+type VehicleType = {
+  vehicleTypeId: string;
+  vehicleType: string;
+  isDeleted?: boolean;
+};
+
+type Tax = {
+  taxId: string;
+  taxName: string;
+  taxPercent: number;
+};
+
+type CompanyTaxResponse = {
+  success: boolean;
+  company: Company;
+  allowTax: boolean;
+  taxes: Tax[];
+};
+
+type PackagesApiResponse = {
+  success: boolean;
+  vehicleType?: any;
+  packages: any[];
+  tax?: any;
+};
+
+const cn = (...s: Array<string | false | null | undefined>) => s.filter(Boolean).join(" ");
+
+const toNumber = (v: any) => {
+  const n = Number(String(v ?? "").replace(/[^\d.]/g, ""));
+  return Number.isFinite(n) ? n : 0;
+};
+const inr0 = (n: number) =>
+  new Intl.NumberFormat("en-IN", { style: "currency", currency: "INR", maximumFractionDigits: 0 }).format(
+    Math.round(n)
+  );
+
+function Select({
+  value,
+  onChange,
+  options,
+  placeholder,
+  disabled,
+}: {
+  value: string;
+  onChange: (v: string) => void;
+  options: SelectOpt[];
+  placeholder?: string;
+  disabled?: boolean;
+}) {
+  return (
+    <div className="relative">
+      <select
+        value={value}
+        disabled={disabled}
+        onChange={(e) => onChange(e.target.value)}
+        className={cn(
+          "w-full rounded-xl border border-slate-200 bg-white px-3 py-2.5 text-sm",
+          "outline-none focus:border-slate-400 focus:ring-4 focus:ring-slate-100",
+          "appearance-none",
+          disabled ? "opacity-60 cursor-not-allowed" : ""
+        )}
+      >
+        {placeholder ? <option value="">{placeholder}</option> : null}
+        {options.map((o) => (
+          <option key={o.value} value={o.value}>
+            {o.label}
+          </option>
+        ))}
+      </select>
+
+      <svg
+        className="pointer-events-none absolute right-3 top-1/2 h-4 w-4 -translate-y-1/2 text-slate-500"
+        viewBox="0 0 20 20"
+        fill="currentColor"
+        aria-hidden="true"
+      >
+        <path
+          fillRule="evenodd"
+          d="M5.23 7.21a.75.75 0 011.06.02L10 10.94l3.71-3.71a.75.75 0 111.06 1.06l-4.24 4.24a.75.75 0 01-1.06 0L5.21 8.29a.75.75 0 01.02-1.08z"
+          clipRule="evenodd"
+        />
+      </svg>
+    </div>
+  );
+}
+
+function Input({
+  value,
+  onChange,
+  type = "text",
+  placeholder,
+  rightAddon,
+  disabled,
+}: {
+  value: string;
+  onChange: (v: string) => void;
+  type?: React.HTMLInputTypeAttribute;
+  placeholder?: string;
+  rightAddon?: string;
+  disabled?: boolean;
+}) {
+  return (
+    <div className="relative">
+      <input
+        value={value}
+        type={type}
+        disabled={disabled}
+        placeholder={placeholder}
+        onChange={(e) => onChange(e.target.value)}
+        className={cn(
+          "w-full rounded-xl border border-slate-200 bg-white px-3 py-2.5 text-sm",
+          "outline-none focus:border-slate-400 focus:ring-4 focus:ring-slate-100",
+          rightAddon ? "pr-12" : "",
+          disabled ? "opacity-60 cursor-not-allowed" : ""
+        )}
+      />
+      {rightAddon ? (
+        <div className="absolute right-2 top-1/2 -translate-y-1/2 rounded-lg bg-slate-50 px-2 py-1 text-[11px] text-slate-600">
+          {rightAddon}
+        </div>
+      ) : null}
+    </div>
+  );
+}
+
+function Row({ label, children }: { label: string; children: React.ReactNode }) {
+  return (
+    <div className="grid grid-cols-1 gap-2 md:grid-cols-[170px_1fr] md:items-center">
+      <div className="text-sm font-medium text-slate-700">{label}</div>
+      <div>{children}</div>
+    </div>
+  );
+}
+
+export default function Monthlybooking() {
+  const location = useLocation();
+  const editState = (location.state || {}) as any;
+  const isEditMode = editState?.mode === "edit" && !!editState?.monthlyInvoiceId;
+  const editId = editState?.monthlyInvoiceId as string | undefined;
+  const taxPrefilledRef = useRef(false);
+
+  const navigate = useNavigate();
+  const todayISO = useMemo(() => {
+    const d = new Date();
+    const yyyy = d.getFullYear();
+    const mm = String(d.getMonth() + 1).padStart(2, "0");
+    const dd = String(d.getDate()).padStart(2, "0");
+    return `${yyyy}-${mm}-${dd}`;
+  }, []);
+
+  const [isSubmitting, setIsSubmitting] = useState(false);
+  const [invoiceDate, setInvoiceDate] = useState(todayISO);
+  const [month, setMonth] = useState(todayISO.slice(0, 7));
+
+  const [companyId, setCompanyId] = useState("");
+  const [vehicleTypeId, setVehicleTypeId] = useState("");
+  const [packageKey, setPackageKey] = useState("");
+  const [vehicleNo, setVehicleNo] = useState("");
+
+  const [extraType, setExtraType] = useState("toll");
+  const [discount, setDiscount] = useState("0");
+  const [advance, setAdvance] = useState("0");
+
+  const [extraKmInput, setExtraKmInput] = useState("0");
+  const [extraDaysInput, setExtraDaysInput] = useState("0");
+  const [baseAmount, setBaseAmount] = useState("0");
+  const [notes, setNotes] = useState("");
+
+  const [companies, setCompanies] = useState<SelectOpt[]>([]);
+  const [vehicleTypes, setVehicleTypes] = useState<SelectOpt[]>([]);
+  const [packageOptions, setPackageOptions] = useState<SelectOpt[]>([]);
+
+  const [selectedCompany, setSelectedCompany] = useState<Company | null>(null);
+  const [allowTax, setAllowTax] = useState(false);
+  const [taxes, setTaxes] = useState<Tax[]>([]);
+  const [selectedTaxIds, setSelectedTaxIds] = useState<string[]>([]);
+
+  const [loading, setLoading] = useState(false);
+  const [route, setRoute] = useState("");
+  const [extraHrsInput, setExtraHrsInput] = useState("0");
+
+  // Change Invoice Number modal state
+  const [showChangeInvoiceModal, setShowChangeInvoiceModal] = useState(false);
+  const [changeInvoiceLoading, setChangeInvoiceLoading] = useState(false);
+  const [currentInvoiceNumber, setCurrentInvoiceNumber] = useState<string>("");
+
+  const [extraChargesList, setExtraChargesList] = useState([
+    { type: "toll", amount: "0" },
+  ]);
+
+  const addExtraCharge = () => {
+    setExtraChargesList((prev) => [...prev, { type: "toll", amount: "0" }]);
+  };
+
+  const updateExtraCharge = (index: number, field: "type" | "amount", value: string) => {
+    setExtraChargesList((prev) =>
+      prev.map((row, i) => (i === index ? { ...row, [field]: value } : row))
+    );
+  };
+
+  const removeExtraCharge = (index: number) => {
+    setExtraChargesList((prev) => prev.filter((_, i) => i !== index));
+  };
+
+  const r0 = (v: any) => Math.round(toNumber(v));
+
+  const selectedCompanyLabel = useMemo(
+    () => companies.find((c) => c.value === companyId)?.label || "",
+    [companies, companyId]
+  );
+  const selectedVehicleTypeLabel = useMemo(
+    () => vehicleTypes.find((v) => v.value === vehicleTypeId)?.label || "",
+    [vehicleTypes, vehicleTypeId]
+  );
+  const selectedPackage = useMemo(
+    () => packageOptions.find((p) => p.value === packageKey)?.meta || null,
+    [packageOptions, packageKey]
+  );
+  const selectedPackageText = useMemo(
+    () => packageOptions.find((p) => p.value === packageKey)?.label || "",
+    [packageOptions, packageKey]
+  );
+
+  const toggleTax = (taxId: string) => {
+    if (!allowTax) return;
+    setSelectedTaxIds((prev) =>
+      prev.includes(taxId) ? prev.filter((x) => x !== taxId) : [...prev, taxId]
+    );
+  };
+
+  const selectedTaxes = useMemo(() => {
+    const map = new Map(taxes.map((t) => [t.taxId, t]));
+    return selectedTaxIds.map((id) => map.get(id)).filter(Boolean) as Tax[];
+  }, [taxes, selectedTaxIds]);
+
+  // ✅ FIX: extraChargesAmt defined BEFORE useMemo computed
+  const extraChargesAmt = useMemo(
+    () => r0(extraChargesList.reduce((sum, row) => sum + toNumber(row.amount), 0)),
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+    [extraChargesList]
+  );
+
+  const computed = useMemo(() => {
+    const pkgAmount = r0(baseAmount);
+
+    const pkgDays = Number(selectedPackage?.__days ?? 0);
+    const pkgKm = Number(selectedPackage?.__km ?? 0);
+
+    const extraKmRate = r0(selectedPackage?.__extraKmRate ?? 0);
+    const extraHourRate = r0(selectedPackage?.__extraHourRate ?? 0);
+
+    const perDayRate = pkgDays > 0 ? pkgAmount / pkgDays : 0;
+
+    const extraKmCount = toNumber(extraKmInput);
+    const extraDaysCount = toNumber(extraDaysInput);
+    const extraHrsCount = toNumber(extraHrsInput);
+
+    const extraKmAmt = r0(extraKmCount * extraKmRate);
+    const extraDaysAmt = r0(extraDaysCount * perDayRate);
+    const extraHrsAmt = r0(extraHrsCount * extraHourRate);
+
+    const disc = r0(discount);
+    const adv = r0(advance);
+
+    const subTotal = r0(pkgAmount + extraKmAmt + extraDaysAmt + extraHrsAmt);
+    const taxable = Math.max(0, r0(subTotal - disc));
+
+    const taxRows = selectedTaxes.map((t) => {
+      const pct = Number(t.taxPercent || 0);
+      const amt = r0((taxable * pct) / 100);
+      return { ...t, amount: amt };
+    });
+
+    const taxTotal = r0(taxRows.reduce((a, b) => a + (b.amount || 0), 0));
+
+    // ✅ FIX: use extraChargesAmt directly (now it's available from useMemo above)
+    const grandTotal = r0(taxable + taxTotal + extraChargesAmt);
+    const balanceDue = Math.max(0, r0(grandTotal - adv));
+
+    return {
+      pkgAmount,
+      pkgDays,
+      pkgKm,
+      extraKmRate,
+      extraHourRate,
+      perDayRate,
+      extraKmCount,
+      extraDaysCount,
+      extraHrsCount,
+      extraKmAmt,
+      extraDaysAmt,
+      extraHrsAmt,
+      disc,
+      adv,
+      extraChargesAmt,
+      subTotal,
+      taxable,
+      taxRows,
+      taxTotal,
+      grandTotal,
+      balanceDue,
+    };
+  }, [
+    baseAmount,
+    selectedPackage,
+    extraKmInput,
+    extraDaysInput,
+    extraHrsInput,
+    discount,
+    advance,
+    extraChargesAmt, // ✅ now a stable useMemo value
+    selectedTaxes,
+  ]);
+
+  useEffect(() => {
+    if (!isEditMode || !editId) return;
+    if (taxPrefilledRef.current) return; 
+
+    (async () => {
+      try {
+        setLoading(true);
+
+        const res = await axiosInstance.get(`/closePendingOrder/monthlyInvoice/${editId}/details`);
+        const monthly = res.data?.data?.monthlyInvoice;
+
+        if (!monthly) {
+          showToast("Monthly invoice not found", "error");
+          return;
+        }
+
+        setInvoiceDate((monthly.invoiceDate || "").slice(0, 10));
+        setMonth(monthly.invoiceMonth || "");
+        setCompanyId(monthly.companyId || "");
+        setVehicleTypeId(monthly.vehicleTypeId || "");
+        setVehicleNo(monthly.vehicleNumber || "");
+        setRoute(monthly.route || "");
+        setExtraKmInput(String(monthly.extraKm ?? 0));
+        setExtraDaysInput(String(monthly.extraDays ?? 0));
+        setExtraHrsInput(String(monthly.extraHrs ?? 0));
+        setExtraType(monthly.extraChargeType || "toll");
+        setDiscount(String(monthly.discount ?? 0));
+        setAdvance(String(monthly.advance ?? 0));
+
+        const taxIds = Array.isArray(monthly.taxes)
+          ? monthly.taxes.map((t: any) => t.taxId)
+          : [];
+        setSelectedTaxIds(taxIds);
+        taxPrefilledRef.current = true;
+
+        const pkg = monthly.packageDetails || null;
+        const pkgDataId = monthly.packageDataId || "";
+        if (pkg && pkgDataId) {
+          const wantedPackageKey = `${pkgDataId}:${pkg.packageId}`;
+          setPackageKey(wantedPackageKey);
+          setBaseAmount(String(pkg.amount ?? 0));
+        }
+
+        if (monthly.companyId) {
+          const taxRes = await axiosInstance.get(`/company/company/${monthly.companyId}/taxes`);
+          const taxList = (taxRes.data?.taxes || []).map((t: any) => ({
+            taxId: t.taxId,
+            taxName: t.taxName,
+            taxPercent: Number(t.taxPercent ?? 0),
+          }));
+          setTaxes(taxList);
+          setAllowTax(!!taxRes.data?.allowTax);
+        }
+
+        // ✅ Restore extraChargesList from DB if available
+     if (Array.isArray(monthly.extraCharges) && monthly.extraCharges.length > 0) {
+      setExtraChargesList(
+        monthly.extraCharges.map((x: any) => ({
+          type: x.type || "toll",
+          amount: String(x.amount ?? 0),
+        }))
+      );
+    }
+      } catch (e: any) {
+        showToast(e?.response?.data?.message || "Failed to load monthly invoice", "error");
+      } finally {
+        setLoading(false);
+      }
+    })();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [isEditMode, editId]);
+
+  // Fetch current invoice number for display when in edit mode
+  useEffect(() => {
+    if (!isEditMode || !editId) return;
+    (async () => {
+      try {
+        const res = await axiosInstance.get(`/closePendingOrder/monthlyInvoice/${editId}/details`);
+        const inv = res.data?.data?.invoice;
+        const monthly = res.data?.data?.monthlyInvoice;
+        setCurrentInvoiceNumber(inv?.invoiceNumber || monthly?.monthlyBookingCode || "");
+      } catch {
+        // ignore
+      }
+    })();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [isEditMode, editId]);
+
+  const handleChangeInvoiceNumber = async () => {
+    if (!editId) return;
+    try {
+      setChangeInvoiceLoading(true);
+      const res = await axiosInstance.post("/closePendingOrder/monthlyInvoice/change-invoice-number", {
+        monthlyInvoiceId: editId,
+      });
+      setCurrentInvoiceNumber(res.data?.newInvoiceNumber || "");
+      showToast("Invoice Number Updated Successfully", "success");
+    } catch (e: any) {
+      showToast(e?.response?.data?.message || "Failed to change invoice number", "error");
+    } finally {
+      setChangeInvoiceLoading(false);
+      setShowChangeInvoiceModal(false);
+    }
+  };
+
+  // LOAD companies + vehicle types
+  useEffect(() => {
+    (async () => {
+      try {
+        setLoading(true);
+
+        const cRes = await axiosInstance.get("/company/getAllCompany", { params: { status: 0 } });
+        const cList: Company[] = cRes.data?.data || [];
+        setCompanies(cList.map((c) => ({ value: c.companyId, label: c.companyName, meta: c })));
+
+        const vRes = await axiosInstance.get("/vehicleType/getAllVehicleType", { params: { status: 0 } });
+        const vList: VehicleType[] = vRes.data?.data || [];
+        setVehicleTypes(
+          vList.filter((x) => !x.isDeleted).map((v) => ({ value: v.vehicleTypeId, label: v.vehicleType, meta: v }))
+        );
+      } catch (e: any) {
+        showToast(e?.response?.data?.message || "Failed to load master data", "error");
+      } finally {
+        setLoading(false);
+      }
+    })();
+  }, []);
+
+  // company -> taxes + company details
+  useEffect(() => {
+    if (!companyId) {
+      setSelectedCompany(null);
+      setTaxes([]);
+      setAllowTax(false);
+      setSelectedTaxIds([]);
+      return;
+    }
+
+    (async () => {
+      try {
+        setLoading(true);
+        const res = await axiosInstance.get<CompanyTaxResponse>(`/company/company/${companyId}/taxes`);
+
+        const comp = res.data?.company || null;
+        const allow = !!res.data?.allowTax;
+        const taxList = (res.data?.taxes || []).map((t) => ({
+          ...t,
+          taxPercent: Number((t as any).taxPercent ?? 0),
+        }));
+
+        setSelectedCompany(comp);
+        setAllowTax(allow);
+        setTaxes(taxList);
+
+      if (!isEditMode) {
+  if (allow && taxList.length) {
+    const cgstSgstIds = taxList
+      .filter((t) => {
+        const name = (t.taxName || "").trim().toLowerCase();
+        return name === "cgst" || name === "sgst";
+      })
+      .map((t) => t.taxId);
+    setSelectedTaxIds(cgstSgstIds);
+  } else {
+    setSelectedTaxIds([]);
+  }
+}else {
+          if (!taxPrefilledRef.current) {
+            setSelectedTaxIds([]);
+          }
+        }
+      } catch (e: any) {
+        setSelectedCompany(null);
+        setTaxes([]);
+        setAllowTax(false);
+        setSelectedTaxIds([]);
+        showToast(e?.response?.data?.message || "Failed to load company taxes", "error");
+      } finally {
+        setLoading(false);
+      }
+    })();
+
+    if (!isEditMode) {
+      setPackageOptions([]);
+      setPackageKey("");
+      setBaseAmount("0");
+      setExtraKmInput("0");
+      setExtraDaysInput("0");
+      setExtraHrsInput("0");
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [companyId, isEditMode]);
+
+  // company + vehicleType -> packages
+  useEffect(() => {
+    if (!companyId || !vehicleTypeId) {
+      setPackageOptions([]);
+      setPackageKey("");
+      return;
+    }
+
+    (async () => {
+      try {
+        setLoading(true);
+
+        const res = await axiosInstance.get<PackagesApiResponse>("/vehicle/getPackagesByVehicleType", {
+          params: { companyId, vehicleTypeId, pickupPoint: "monthly" },
+        });
+
+        const rows = res.data?.packages || [];
+        const opts: SelectOpt[] = [];
+
+        rows.forEach((r: any) => {
+          const mb = r?.monthlyBookings;
+          const pkgs = mb?.packages || [];
+          const extraKmRate = Number(mb?.extraKm ?? 0);
+          const extraHourRate = Number(mb?.extraHour ?? 0);
+
+          pkgs.forEach((p: any) => {
+            const days = Number(p?.hours ?? 0);
+            const km = Number(p?.km ?? 0);
+            const amount = Number(p?.amount ?? 0);
+            const key = `${r.packageDataId}:${p.packageId}`;
+            const label = `${days} days / ${km} kms - ${inr0(amount)}`;
+
+            opts.push({
+              value: key,
+              label,
+              meta: {
+                ...p,
+                __days: days,
+                __km: km,
+                __amount: amount,
+                __extraKmRate: extraKmRate,
+                __extraHourRate: extraHourRate,
+                __packageDataId: r.packageDataId,
+              },
+            });
+          });
+        });
+
+        setPackageOptions(opts);
+
+        if (!opts.length) {
+          setPackageKey("");
+          setBaseAmount("0");
+          showToast("No monthly packages found", "warn");
+          return;
+        }
+
+        if (!isEditMode) {
+          setPackageKey(opts[0].value);
+          setBaseAmount(String(opts[0].meta.__amount ?? 0));
+        } else {
+          const found = opts.find((x) => x.value === packageKey);
+          if (found) setBaseAmount(String(found.meta.__amount ?? 0));
+        }
+      } catch (e: any) {
+        setPackageOptions([]);
+        setPackageKey("");
+        setBaseAmount("0");
+        showToast(e?.response?.data?.message || "Failed to load packages", "error");
+      } finally {
+        setLoading(false);
+      }
+    })();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [companyId, vehicleTypeId]);
+
+  // package change -> base + notes
+  useEffect(() => {
+    if (!selectedPackage) return;
+
+    const base = Number(selectedPackage.__amount ?? 0);
+    setBaseAmount(String(base));
+
+    const days = Number(selectedPackage.__days ?? 0);
+    const km = Number(selectedPackage.__km ?? 0);
+
+    setNotes(
+      `Towards for the month of ${month} (Vehicle NO - ${vehicleNo || "-"} / ${
+        selectedVehicleTypeLabel || "-"
+      } / ${days} days / ${km} kms Coverage)`
+    );
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [packageKey]);
+
+  useEffect(() => {
+    if (!isEditMode) return;
+    if (!packageKey) return;
+    if (!packageOptions.length) return;
+
+    const found = packageOptions.find((p) => p.value === packageKey);
+    if (found) {
+      setBaseAmount(String(found.meta.__amount ?? 0));
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [packageOptions]);
+
+  const extraChargeLabel =
+    extraType === "toll"
+      ? "Toll Charges"
+      : extraType === "parking"
+      ? "Parking Charges"
+      : extraType === "permit"
+      ? "Permit Charges"
+      : "Other Charges";
+
+  const resetForm = () => {
+    setInvoiceDate(todayISO);
+    setMonth(todayISO.slice(0, 7));
+    setCompanyId("");
+    setVehicleTypeId("");
+    setPackageKey("");
+    setPackageOptions([]);
+    setVehicleNo("");
+    setExtraKmInput("0");
+    setExtraDaysInput("0");
+    setExtraHrsInput("0");
+    setDiscount("0");
+    setAdvance("0");
+    setBaseAmount("0");
+    setNotes("");
+    setSelectedCompany(null);
+    setAllowTax(false);
+    setTaxes([]);
+    setSelectedTaxIds([]);
+    setExtraChargesList([{ type: "toll", amount: "0" }]);
+  };
+
+  const buildPayload = () => {
+    if (!invoiceDate || !month) throw new Error("Select invoice date & month");
+    if (!companyId) throw new Error("Select company");
+    if (!vehicleTypeId) throw new Error("Select vehicle type");
+    if (!vehicleNo.trim()) throw new Error("Enter vehicle number");
+    if (!selectedPackage) throw new Error("Select package");
+
+    return {
+      invoiceDate,
+      invoiceMonth: month,
+      companyId,
+      companyName: selectedCompanyLabel || selectedCompany?.companyName || "",
+      vehicleTypeId,
+      vehicleTypeName: selectedVehicleTypeLabel || "",
+      vehicleNumber: vehicleNo,
+      route,
+      packageDataId: selectedPackage?.__packageDataId || null,
+      packageDetails: {
+        packageId: selectedPackage?.packageId,
+        title: selectedPackage?.title,
+        hours: computed.pkgDays,
+        km: computed.pkgKm,
+        amount: computed.pkgAmount,
+        extraKmRate: computed.extraKmRate,
+        label: selectedPackageText,
+      },
+      extraKm: computed.extraKmCount,
+      extraDays: computed.extraDaysCount,
+      extraHrs: computed.extraHrsCount,
+      extraHourRate: computed.extraHourRate,
+      extraHrsAmount: computed.extraHrsAmt,
+     extraCharges: extraChargesList.map((x) => ({
+  type: x.type,
+  amount: toNumber(x.amount),
+})),
+extraChargesInputAmount: computed.extraChargesAmt, 
+      discount: toNumber(discount),
+      advance: toNumber(advance),
+      packageAmount: computed.pkgAmount,
+      extraKmAmount: computed.extraKmAmt,
+      extraDaysAmount: computed.extraDaysAmt,
+      netTotal: computed.taxable,
+      taxes: computed.taxRows,
+      totalTaxAmount: computed.taxTotal,
+      finalTotal: computed.grandTotal,
+      balanceDue: computed.balanceDue,
+      selectedTaxIds: allowTax ? selectedTaxIds : [],
+    };
+  };
+
+  const handleCloseOrder = async () => {
+    try {
+      if (loading || isSubmitting) return;
+      setIsSubmitting(true);
+
+      const payload = buildPayload();
+
+      if (isEditMode && editId) {
+        const res = await axiosInstance.put("/closePendingOrder/monthly-invoice/edit", {
+          ...payload,
+          monthlyInvoiceId: editId,
+        });
+        showToast(res.data?.message || "Monthly invoice updated", "success");
+      } else {
+        const res = await axiosInstance.post("/closePendingOrder/monthlyInvoice/create", payload);
+        showToast(res.data?.message || "Monthly invoice saved", "success");
+      }
+
+      resetForm();
+      navigate("/orders/paymentpending");
+    } catch (e: any) {
+      showToast(
+        e?.response?.data?.message || e?.message || "Failed to save monthly invoice",
+        "error"
+      );
+    } finally {
+      setIsSubmitting(false);
+    }
+  };
+
+  return (
+    <div className="min-h-screen bg-slate-100 p-4 md:p-8">
+      <div className="mx-auto w-full max-w-6xl">
+        <div className="overflow-hidden rounded-2xl border border-slate-200 bg-white shadow-sm">
+          {/* Header */}
+          <div className="flex flex-col gap-2 border-b border-slate-200 px-5 py-4 md:flex-row md:items-center md:justify-between">
+            <div>
+              <div className="text-lg font-semibold text-slate-900">Monthly Invoice Entry</div>
+              {isEditMode && currentInvoiceNumber && (
+                <div className="text-sm text-slate-500 mt-0.5">
+                  Invoice No: <span className="font-semibold text-slate-700">{currentInvoiceNumber}</span>
+                </div>
+              )}
+            </div>
+            {isEditMode && (
+              <button
+                type="button"
+                onClick={() => setShowChangeInvoiceModal(true)}
+                className="rounded-xl bg-amber-500 hover:bg-amber-600 active:scale-95 px-4 py-2 text-sm font-semibold text-white transition-all shadow-sm"
+              >
+                Change Invoice Number
+              </button>
+            )}
+          </div>
+
+          {/* FORM */}
+          <div className="px-5 py-6">
+            <div className="rounded-2xl border border-slate-200 bg-white p-4">
+              <div className="grid grid-cols-1 gap-4 md:grid-cols-2">
+                <Row label="Date">
+                  <Input value={invoiceDate} onChange={setInvoiceDate} type="date" disabled={loading} />
+                </Row>
+
+                <Row label="Month">
+                  <Input value={month} onChange={setMonth} type="month" disabled={loading} />
+                </Row>
+
+                <Row label="Company">
+                  <Select
+                    value={companyId}
+                    onChange={(v) => {
+                      setCompanyId(v);
+                      setVehicleTypeId("");
+                      setPackageKey("");
+                      setPackageOptions([]);
+                    }}
+                    options={companies}
+                    placeholder="Select Company"
+                    disabled={loading}
+                  />
+                </Row>
+
+                <Row label="Vehicle Type">
+                  <Select
+                    value={vehicleTypeId}
+                    onChange={(v) => {
+                      setVehicleTypeId(v);
+                      setPackageKey("");
+                      setPackageOptions([]);
+                    }}
+                    options={vehicleTypes}
+                    placeholder="Select Vehicle Type"
+                    disabled={!companyId || loading}
+                  />
+                </Row>
+
+                <Row label="Vehicle No">
+                  <Input value={vehicleNo} onChange={setVehicleNo} placeholder="TN11 BS-4234" disabled={loading} />
+                </Row>
+
+                <Row label="Route">
+                  <Input
+                    value={route}
+                    onChange={setRoute}
+                    placeholder="Chennai → Bangalore"
+                    disabled={loading}
+                  />
+                </Row>
+
+                <Row label="Package">
+                  <Select
+                    value={packageKey}
+                    onChange={setPackageKey}
+                    options={packageOptions}
+                    placeholder={
+                      !companyId || !vehicleTypeId
+                        ? "Select company & vehicle type first"
+                        : "Select Package"
+                    }
+                    disabled={!companyId || !vehicleTypeId || loading}
+                  />
+                </Row>
+
+                {/* Extra inputs */}
+                <div className="grid grid-cols-1 gap-4 md:grid-cols-3">
+                  <div>
+                    <div className="mb-2 text-sm font-medium text-slate-700">Extra KM</div>
+                    <Input value={extraKmInput} onChange={setExtraKmInput} rightAddon="KM" disabled={loading} />
+                    <div className="mt-1 text-xs text-slate-500">
+                      Rate: <b>{inr0(computed.extraKmRate)}</b>
+                    </div>
+                  </div>
+
+                  <div>
+                    <div className="mb-2 text-sm font-medium text-slate-700">Extra Days</div>
+                    <Input value={extraDaysInput} onChange={setExtraDaysInput} rightAddon="Days" disabled={loading} />
+                    <div className="mt-1 text-xs text-slate-500">
+                      Per day: <b>{inr0(computed.perDayRate)}</b>
+                    </div>
+                  </div>
+
+                  <div>
+                    <div className="mb-2 text-sm font-medium text-slate-700">Extra Hrs</div>
+                    <Input value={extraHrsInput} onChange={setExtraHrsInput} rightAddon="Hrs" disabled={loading} />
+                    <div className="mt-1 text-xs text-slate-500">
+                      Rate: <b>{inr0(computed.extraHourRate)}</b>
+                    </div>
+                  </div>
+                </div>
+
+                <Row label="Extra Charges">
+                  <div className="space-y-2">
+                    {extraChargesList.map((row, index) => (
+                      <div key={index} className="grid grid-cols-1 gap-2 md:grid-cols-3">
+                        <Select
+                          value={row.type}
+                          onChange={(v) => updateExtraCharge(index, "type", v)}
+                          options={[
+                            { value: "toll", label: "Tollgate" },
+                            { value: "parking", label: "Parking" },
+                            { value: "permit", label: "Permit" },
+                            { value: "other", label: "Other" },
+                          ]}
+                        />
+                        <Input
+                          value={row.amount}
+                          onChange={(v) => updateExtraCharge(index, "amount", v)}
+                          rightAddon="₹"
+                        />
+                        <button
+                          type="button"
+                          onClick={() => removeExtraCharge(index)}
+                          className="rounded-lg border px-2 py-1 text-sm text-red-600"
+                        >
+                          Remove
+                        </button>
+                      </div>
+                    ))}
+                    <button
+                      type="button"
+                      onClick={addExtraCharge}
+                      className="text-sm text-blue-600 font-medium"
+                    >
+                      + Add More
+                    </button>
+                  </div>
+                </Row>
+
+                <Row label="Taxes">
+                  {!companyId ? (
+                    <div className="text-sm text-slate-500">Select company first</div>
+                  ) : !allowTax ? (
+                    <div className="rounded-xl border border-amber-200 bg-amber-50 px-3 py-2 text-sm text-amber-900">
+                      allowTax = NO (This company cannot apply taxes)
+                    </div>
+                  ) : taxes.length === 0 ? (
+                    <div className="text-sm text-slate-500">No active taxes found</div>
+                  ) : (
+                    <div className="flex flex-wrap gap-3">
+                      {taxes.map((t) => {
+                        const checked = selectedTaxIds.includes(t.taxId);
+                        return (
+                          <label
+                            key={t.taxId}
+                            className={cn(
+                              "flex items-center gap-2 rounded-xl border px-3 py-2 text-sm",
+                              checked ? "border-slate-300 bg-slate-50" : "border-slate-200 bg-white"
+                            )}
+                          >
+                            <input type="checkbox" checked={checked} onChange={() => toggleTax(t.taxId)} />
+                            <span className="font-medium text-slate-800">{t.taxName}</span>
+                            <span className="text-slate-500">({t.taxPercent}%)</span>
+                          </label>
+                        );
+                      })}
+                    </div>
+                  )}
+                </Row>
+
+                <Row label="Discount">
+                  <Input value={discount} onChange={setDiscount} rightAddon="₹" disabled={loading} />
+                </Row>
+
+                <Row label="Advance">
+                  <Input value={advance} onChange={setAdvance} rightAddon="₹" disabled={loading} />
+                </Row>
+              </div>
+
+              {/* Buttons + Summary */}
+              <div className="mt-5 flex items-center justify-between">
+                <button
+                  type="button"
+                  onClick={handleCloseOrder}
+                  disabled={loading || isSubmitting}
+                  className={cn(
+                    "rounded-xl border border-slate-200 px-4 py-2 text-sm text-slate-700 hover:bg-slate-50",
+                    loading || isSubmitting ? "opacity-60 cursor-not-allowed" : ""
+                  )}
+                >
+                  {isSubmitting ? "Saving..." : isEditMode ? "Update Monthly" : "Close Order"}
+                </button>
+
+                {/* Calculations Summary */}
+                <div className="rounded-2xl border w-[350px] border-slate-200 bg-white p-4">
+                  <div className="mt-4 space-y-2 text-sm">
+                    <div className="flex justify-between">
+                      <span>Package Amount</span>
+                      <span className="font-semibold">{inr0(computed.pkgAmount)}</span>
+                    </div>
+
+                    <div className="flex justify-between items-start">
+                      <span>
+                        Extra KM Amount ({computed.extraKmCount} KM × {inr0(computed.extraKmRate)})
+                      </span>
+                      <div className="text-right">
+                        <div className="font-semibold">{inr0(computed.extraKmAmt)}</div>
+                      </div>
+                    </div>
+
+                    <div className="flex justify-between items-start">
+                      <span>
+                        Extra Hrs Amount ({computed.extraHrsCount} Hrs × {inr0(computed.extraHourRate)})
+                      </span>
+                      <div className="text-right">
+                        <div className="font-semibold">{inr0(computed.extraHrsAmt)}</div>
+                      </div>
+                    </div>
+
+                    <div className="flex justify-between items-start">
+                      <span>
+                        Extra Days Amount ({computed.extraDaysCount} Days × {inr0(computed.perDayRate)})
+                      </span>
+                      <div className="text-right">
+                        <div className="font-semibold">{inr0(computed.extraDaysAmt)}</div>
+                      </div>
+                    </div>
+
+                    <div className="flex justify-between">
+                      <span>Discount</span>
+                      <span className="font-semibold">- {inr0(toNumber(discount))}</span>
+                    </div>
+
+                    <div className="flex justify-between border-t pt-2 font-semibold">
+                      <span>Net Total</span>
+                      <span>{inr0(computed.taxable)}</span>
+                    </div>
+
+                    {computed.taxRows.length ? (
+                      <div className="rounded-xl border border-slate-200 bg-slate-50 p-3">
+                        <div className="text-sm font-semibold text-slate-800 mb-2">Taxes</div>
+                        <div className="space-y-1">
+                          {computed.taxRows.map((t: any) => (
+                            <div key={t.taxId} className="flex justify-between">
+                              <span className="text-slate-700">
+                                {t.taxName} ({t.taxPercent}%)
+                              </span>
+                              <span className="font-semibold">{inr0(t.amount || 0)}</span>
+                            </div>
+                          ))}
+                          <div className="flex justify-between border-t pt-2 font-semibold">
+                            <span>Total Tax</span>
+                            <span>{inr0(computed.taxTotal)}</span>
+                          </div>
+                        </div>
+                      </div>
+                    ) : (
+                      <div className="text-xs text-slate-500">No taxes selected</div>
+                    )}
+
+                    <div className="flex justify-between">
+                      <span>{extraChargeLabel}</span>
+                      <span className="font-semibold">{inr0(computed.extraChargesAmt)}</span>
+                    </div>
+
+                    <div className="flex justify-between border-t pt-2 text-[15px] font-bold">
+                      <span>Final Total</span>
+                      <span>{inr0(computed.grandTotal)}</span>
+                    </div>
+
+                    <div className="flex justify-between">
+                      <span>Advance</span>
+                      <span className="font-semibold">- {inr0(toNumber(advance))}</span>
+                    </div>
+
+                    <div className="flex justify-between text-[15px] font-bold">
+                      <span>Balance Due</span>
+                      <span>{inr0(computed.balanceDue)}</span>
+                    </div>
+                  </div>
+                </div>
+              </div>
+            </div>
+          </div>
+
+          <div className="border-t border-slate-200" />
+        </div>
+      </div>
+
+      <AlertContainer />
+
+      {/* Change Invoice Number Confirmation Modal */}
+      {showChangeInvoiceModal && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 backdrop-blur-sm">
+          <div className="bg-white rounded-2xl shadow-2xl p-6 w-full max-w-sm mx-4 border border-slate-200">
+            <div className="flex items-center gap-3 mb-4">
+              <div className="w-10 h-10 rounded-full bg-amber-100 flex items-center justify-center flex-shrink-0">
+                <svg className="w-5 h-5 text-amber-600" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+                  <path strokeLinecap="round" strokeLinejoin="round" d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" />
+                </svg>
+              </div>
+              <h2 className="text-base font-bold text-slate-900">Change Invoice Number</h2>
+            </div>
+            <p className="text-sm text-slate-600 mb-6">
+              Do you want to generate a new Invoice Number?
+            </p>
+            <div className="flex gap-3 justify-end">
+              <button
+                type="button"
+                onClick={() => setShowChangeInvoiceModal(false)}
+                disabled={changeInvoiceLoading}
+                className="rounded-xl border border-slate-200 px-5 py-2 text-sm font-medium text-slate-700 hover:bg-slate-50 transition-all disabled:opacity-60"
+              >
+                NO
+              </button>
+              <button
+                type="button"
+                onClick={handleChangeInvoiceNumber}
+                disabled={changeInvoiceLoading}
+                className="rounded-xl bg-amber-500 hover:bg-amber-600 px-5 py-2 text-sm font-semibold text-white transition-all disabled:opacity-60 active:scale-95"
+              >
+                {changeInvoiceLoading ? "Generating..." : "YES"}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+    </div>
+  );
+}

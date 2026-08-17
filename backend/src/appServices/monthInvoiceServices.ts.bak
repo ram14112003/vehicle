@@ -1,0 +1,1040 @@
+
+import { Request, Response } from 'express';
+import puppeteer from 'puppeteer';
+import path from 'path';
+import fs from 'fs';
+import { MonthlyInvoice } from '../models/monthlyInvoice';
+import { Company } from '../models/company';
+import { VehicleType } from '../models/vehicleType';
+import { USERS } from "../utils/costants";
+import jwt from "jsonwebtoken";
+import { Length } from 'sequelize-typescript';
+import { Invoice, User } from '../models';
+import { Op } from "sequelize";
+ 
+
+const JWT_SECRET = process.env.JWT_SECRET || "supersecret";
+const { ROLES } = USERS;
+const logoPath = path.join(__dirname, "..", "images", "logo.png");
+const logoBase64 = fs.readFileSync(logoPath, "base64");
+const logoSrc = `data:image/jpeg;base64,${logoBase64}`;
+
+// Interface for line items in invoice
+interface InvoiceLineItem {
+  label: string;
+  value: string | number;
+  isTotal?: boolean;
+  isSubTotal?: boolean;
+  isSubItem?: boolean;
+  isBold?: boolean;
+  isNegative?: boolean;
+  isInfo?: boolean;
+}
+
+// Interface for tax item
+interface TaxItem {
+  taxId: string;
+  amount: number;
+  taxName: string;
+  taxPercent: number;
+}
+
+// Interface for structured invoice data
+interface InvoiceData {
+  invoiceNumber: string;
+  invoiceDate: string;
+  invoiceMonth: string;
+  gstNo: string;
+  vehicleType: string;
+  vehicleNumber: string;
+  companyName: string;
+  companyAddress: string;
+  route: string;
+  lineItems: InvoiceLineItem[];
+  companyGstNo: string;
+  taxDetails: TaxItem[];
+  amountInWords: string;
+}
+
+// Helper function to safely convert to number
+const safeNumber = (value: any): number => {
+  if (value === null || value === undefined || value === '') return 0;
+  const num = typeof value === 'string' ? parseFloat(value) : Number(value);
+  return isNaN(num) ? 0 : num;
+};
+// Helper function to convert number to words
+const numberToWords = (num: number): string => {
+  if (num === 0) return 'Zero';
+  
+  const ones = ['', 'One', 'Two', 'Three', 'Four', 'Five', 'Six', 'Seven', 'Eight', 'Nine'];
+  const tens = ['', '', 'Twenty', 'Thirty', 'Forty', 'Fifty', 'Sixty', 'Seventy', 'Eighty', 'Ninety'];
+  const teens = ['Ten', 'Eleven', 'Twelve', 'Thirteen', 'Fourteen', 'Fifteen', 'Sixteen', 'Seventeen', 'Eighteen', 'Nineteen'];
+  
+  const convertLessThanThousand = (n: number): string => {
+    if (n === 0) return '';
+    if (n < 10) return ones[n];
+    if (n < 20) return teens[n - 10];
+    if (n < 100) return tens[Math.floor(n / 10)] + (n % 10 !== 0 ? ' ' + ones[n % 10] : '');
+    return ones[Math.floor(n / 100)] + ' Hundred' + (n % 100 !== 0 ? ' ' + convertLessThanThousand(n % 100) : '');
+  };
+  
+  const convertIndianSystem = (n: number): string => {
+    if (n === 0) return 'Zero';
+    
+    const crore = Math.floor(n / 10000000);
+    const lakh = Math.floor((n % 10000000) / 100000);
+    const thousand = Math.floor((n % 100000) / 1000);
+    const remainder = n % 1000;
+    
+    let result = '';
+    
+    if (crore > 0) result += convertLessThanThousand(crore) + ' Crore ';
+    if (lakh > 0) result += convertLessThanThousand(lakh) + ' Lakh ';
+    if (thousand > 0) result += convertLessThanThousand(thousand) + ' Thousand ';
+    if (remainder > 0) result += convertLessThanThousand(remainder);
+    
+    return result.trim();
+  };
+  
+  const integerPart = Math.floor(num);
+  const decimalPart = Math.round((num - integerPart) * 100);
+  
+  let result = convertIndianSystem(integerPart) + ' Rupees';
+  
+  if (decimalPart > 0) {
+    result += ' and ' + convertLessThanThousand(decimalPart) + ' Paise';
+  }
+  
+  return result + ' Only';
+};
+
+const formatInvoiceMonth = (invoiceMonth: string): string => {
+  if (!invoiceMonth) return 'N/A';
+  
+  // Check if the format is YYYY-MM (e.g., "2025-12") or MM-YYYY (e.g., "12-2025")
+  const parts = invoiceMonth.split('-');
+  
+  if (parts.length === 2) {
+    const monthNames = [
+      'Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun',
+      'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'
+    ];
+    
+    const first = parseInt(parts[0], 10);
+    const second = parseInt(parts[1], 10);
+    
+    // Check if format is YYYY-MM (first part is year, second is month)
+    if (first > 12 && second >= 1 && second <= 12) {
+      return `${monthNames[second - 1]}-${first}`;
+    }
+    // Check if format is MM-YYYY (first part is month, second is year)
+    else if (first >= 1 && first <= 12 && second > 12) {
+      return `${monthNames[first - 1]}-${second}`;
+    }
+  }
+  
+  // If already in alphabetic format or invalid format, return as is
+  return invoiceMonth;
+};
+
+
+// Generate HTML with dynamic line items for MONTHLY INVOICE
+export const generateMonthlyInvoiceHTML = (data: InvoiceData): string => {
+  const lineItemsHTML = data.lineItems.map(item => {
+    let rowClass = '';
+    let tdClass = '';
+
+    if (item.isTotal) {
+      rowClass = 'total-row';
+    } else if (item.isSubTotal) {
+      rowClass = 'subtotal-row';
+    }
+
+    if (item.isSubItem) {
+      tdClass = 'additional-item';
+    } else if (item.isBold) {
+      tdClass = 'additional-charges';
+    }
+
+    const displayValue = typeof item.value === 'number'
+      ? item.value.toFixed(2)
+      : item.value;
+
+    return `
+      <tr${rowClass ? ` class="${rowClass}"` : ''}>
+        <td${tdClass ? ` class="${tdClass}"` : ''}>${item.label}</td>
+        <td>${displayValue}</td>
+      </tr>
+    `;
+  }).join('');
+
+  return `
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Grace Cabs Private Limited - Invoice</title>
+    <style>
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+
+        body {
+            font-family: Arial, sans-serif;
+            background-color: #fff;
+            padding: 12px;
+            font-size: 13px;
+        }
+
+        .invoice-container {
+            max-width: 800px;
+            margin: 0 auto;
+            background-color: white;
+            border: 1px solid #ddd;
+            padding: 18px;
+        }
+
+        .header {
+            display: flex;
+            justify-content: space-between;
+            align-items: flex-start;
+            margin-bottom: 18px;
+            padding-bottom: 10px;
+            border-bottom: 2px solid #333;
+        }
+
+        .invoice-info {
+            text-align: right;
+            font-size: 11px;
+            line-height: 1.5;
+        }
+
+        .invoice-info strong {
+            color: #333;
+        }
+
+        .section-header {
+            background-color: rgba(82, 121, 152, 1);
+            padding: 5px 12px;
+            font-weight: bold;
+            color: #fff;
+            margin: 12px 0 6px 0;
+            font-size: 11px;
+        }
+
+        .billing-booking-row {
+            display: flex;
+            justify-content: space-between;
+            gap: 40px;
+            margin: 20px 0;
+        }
+
+        .billing-section {
+            flex: 1;
+            min-width: 45%;
+        }
+
+        .booking-section {
+            flex: 1;
+            min-width: 45%;
+        }
+
+        .field-group {
+            margin-bottom: 8px;
+            font-size: 13px;
+            display: flex;
+            gap: 8px;
+        }
+
+        .field-label {
+            font-weight: 400;
+        }
+
+        .field-value {
+            flex: 1;
+            font-size: 14px;
+          
+        }
+
+        .company-name {
+            font-size: 11px;
+            font-weight: bold;
+            margin-bottom: 8px;
+        }
+
+        .company-address {
+            font-size: 11px;
+            line-height: 1.5;
+            margin-bottom: 8px;
+            color: #333;
+        }
+
+        .invoice-section-header {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            padding: 5px 11px;
+            background-color: rgba(82, 121, 152, 1);
+            font-weight: bold;
+            color: #fff;
+            margin: 12px 0 0 0;
+            font-size: 11px;
+        }
+
+        .invoice-table {
+            width: 100%;
+            border-collapse: collapse;
+            margin: 0 0 12px 0;
+        }
+
+        .invoice-table td {
+            padding: 6px 12px;
+            border: none;
+            font-size: 12px;
+            vertical-align: top;
+        }
+
+        .invoice-table td:first-child {
+            text-align: left;
+            color: #333;
+        }
+
+        .invoice-table td:last-child {
+            text-align: right;
+            font-weight: 400;
+        }
+
+        .additional-charges {
+            font-weight: bold;
+            color: #333;
+            padding-top: 7px !important;
+        }
+
+        .additional-item {
+            padding-left: 20px;
+            color: #666;
+            font-size: 11px;
+        }
+
+        .subtotal-row td {
+            padding-top: 8px !important;
+            font-weight: 600;
+            border-top: 1px solid #ddd;
+        }
+
+        .total-row {
+            border-top: 2px solid #333;
+        }
+
+        .total-row td {
+            font-weight: bold;
+            font-size: 18px;
+            color: #4CAF50;
+            padding-top: 10px !important;
+        }
+
+        .footer-info {
+            margin-top: 15px;
+            font-size: 11px;
+            line-height: 1.3;
+            border-top: 1px solid #ddd;
+            padding-top: 12px;
+        }
+
+        .footer-row {
+            display: flex;
+            margin-bottom: 3px;
+        }
+
+        .footer-label {
+            font-weight: bold;
+            min-width: 80px;
+        }
+           
+
+        @media print {
+            body {
+                padding: 0;
+            }
+            .invoice-container {
+                border: none;
+                padding: 12px;
+            }
+        }
+
+        @page {
+            size: A4;
+            margin: 12mm;
+        }
+
+        .logo-section {
+            display: flex;
+            align-items: center;
+            gap: 10px;
+        }
+
+        .logo-img {
+            height: 60px;
+            width: auto;
+        }
+
+        .monthly-title {
+            text-align: center;
+            margin: 15px 0;
+        }
+
+        .monthly-title h2 {
+            color: rgb(39, 89, 129);
+            font-weight: bold;
+            margin: 0;
+            font-size: 20px;
+        }
+    </style>
+</head>
+<body>
+    <div class="invoice-container">
+        <!-- Header -->
+        <div class="header">
+            <div class="logo-section">
+                <img src="${logoSrc}" alt="Grace Cabs" class="logo-img" />
+            </div>
+            <div class="invoice-info">
+                <div><strong>Invoice Number:</strong> ${data.invoiceNumber}</div>
+                <div><strong>Invoice Date:</strong> ${data.invoiceDate}</div>
+                <div><strong>Invoice Month:</strong> ${data.invoiceMonth}</div>
+            </div>
+        </div>
+
+        <div class="monthly-title">
+            <h2> Invoice</h2>
+        </div>
+
+        <div class="billing-booking-row">
+            <div class="billing-section">
+                <div class="section-header">Billing From</div>
+                <div class="field-group">Grace Cabs Private Limited</div>
+                <div class="field-group">7/621 NESAMANI NAGAR,</div>
+                <div class="field-group">PERUMBAKKAM, CHENNAI - 600100</div>
+                <div class="field-group">GSTIN: 33AAMCG2518C1Z0</div>
+            </div>
+            
+            <div class="billing-section">
+                <div class="section-header">Billing To</div>
+                <div class="field-group">
+                  
+                    <div class="field-value">${data.companyName}</div>
+                </div>
+                <div class="field-group">
+                    
+                    <div class="field-value">${data.companyAddress}</div>
+                </div>
+                <div class="field-group">
+                    <div class="field-label">GSTIN:</div>
+                    <div class="field-value">${data.companyGstNo}</div>
+                </div>
+            </div>
+        </div>
+        
+        <!-- Vehicle Details -->
+        <div class="billing-section">
+          <div class="section-header">Transport Details</div>
+          <div class="field-group">
+            <div class="field-label">Vehicle Type:</div>
+            <div class="field-value">${data.vehicleType}</div>
+          </div>
+          <div class="field-group">
+            <div class="field-label">Vehicle Number:</div>
+            <div class="field-value">${data.vehicleNumber}</div>
+          </div>
+          <div class="field-group">
+            <div class="field-label">Route:</div>
+            <div class="field-value">${data.route}</div>
+          </div>
+        </div>
+
+     
+
+        <!-- Invoice Details -->
+        <div class="invoice-section-header">
+            <span>Invoice Details</span>
+            <span>Amount (Rs)</span>
+        </div>
+      
+        <table class="invoice-table">
+            ${lineItemsHTML}
+        </table>
+          <div class="amount-in-words">
+            <strong>${data.amountInWords}</strong> 
+        </div>
+        <!-- Footer Information -->
+        <div class="footer-info">
+            <div class="footer-row">
+                <span class="footer-label">Regd.Office:</span>
+                <span>Grace Cabs Pvt. Ltd., 7/621 NESAMANI NAGAR, PERUMBAKKAM, CHENNAI - 600100</span>
+            </div>
+            <div class="footer-row">
+                <span class="footer-label">Website:</span>
+                <span>gracecabs.com</span>
+            </div>
+            <div class="footer-row">
+                <span class="footer-label">GSTIN:</span>
+                <span>33AAMCG2518C1Z0</span>
+            </div>
+            <div class="footer-row">
+                <span class="footer-label">PAN No.:</span>
+                <span>AAMCG2518C</span>
+            </div>
+            <div class="footer-row">
+                <span class="footer-label">SAC:</span>
+                <span>996609</span>
+            </div>
+            <div class="footer-row">
+                <p>*It is a system generated invoice which does not need a signature</p>
+            </div>
+              <div class="footer-row">
+                 <p> *GST 5 % - Without ITC </p>
+            </div>
+            <div class="footer-row">
+                <p>*GST 12% - With ITC</p>
+            </div>
+        </div>
+    </div>
+</body>
+</html>
+  `;
+};
+
+// Build line items for MONTHLY INVOICE
+const buildMonthlyLineItems = (monthlyInvoice: MonthlyInvoice): InvoiceLineItem[] => {
+  const items: InvoiceLineItem[] = [];
+ const packageAmount = safeNumber(monthlyInvoice.packageAmount);
+  if (packageAmount > 0) {
+      let month =  formatInvoiceMonth(monthlyInvoice.invoiceMonth);
+      let Vtype = monthlyInvoice.vehicleTypeName;
+      let vNum = monthlyInvoice.vehicleNumber
+      let Route = monthlyInvoice.route;
+      var packageLabel = `Towards for the month of ${month} \n VehicleNo-${vNum} \n ${Vtype}\n${Route} Cab Charges.`
+      if (monthlyInvoice.packageDetails) {
+      try {
+        const details = typeof monthlyInvoice.packageDetails === 'string'
+          ? JSON.parse(monthlyInvoice.packageDetails)
+          : monthlyInvoice.packageDetails;
+
+        if (details.label || details.packageName) {
+          packageLabel += ` (${details.label || details.packageName})`;
+        }
+      } catch (e) {
+        console.error('Error parsing package details:', e);
+      }
+    }
+
+    items.push({
+      label: `${packageLabel} Coverage.`,
+      value: `${packageAmount} `
+    });
+  }
+
+  // Extra KM Amount
+  const extraKm = safeNumber(monthlyInvoice.extraKm);
+  const extraKmAmount = safeNumber(monthlyInvoice.extraKmAmount);
+  if (extraKmAmount > 0) {
+    items.push({
+      label: `Extra Kms (${extraKm} km x  ₹${Math.round(extraKmAmount / extraKm)})`,
+      value: extraKmAmount
+    });
+  }
+
+  // Extra Days Amount
+  const extraDays = safeNumber(monthlyInvoice.extraDays);
+  const extraDaysAmount = safeNumber(monthlyInvoice.extraDaysAmount);
+  if (extraDaysAmount > 0) {
+    items.push({
+      label: `Extra Days (${extraDays} days) × ₹${Math.round(extraDaysAmount / extraDays)})`,
+      value: extraDaysAmount
+    });
+  }
+//Extra Hours amount
+const extraHours = safeNumber(monthlyInvoice.extraHrs);
+  const extraHoursAmount = safeNumber(monthlyInvoice.extraHrsAmount);
+  if (extraHoursAmount > 0) {
+    items.push({
+      label: `Extra Hours (${extraHours} Hrs × ₹${safeNumber(monthlyInvoice.extraHourRate)})`,
+      value: extraHoursAmount
+    });
+  }
+ 
+
+  
+
+  // Tax breakdown - Still show in invoice table for detail
+  const taxes = monthlyInvoice.taxes;
+  if (taxes) {
+    try {
+      const taxData = typeof taxes === 'string' ? JSON.parse(taxes) : taxes;
+
+      // Handle both array and object format
+      if (Array.isArray(taxData)) {
+        // Array format: [{ taxId, amount, taxName, taxPercent }, ...]
+        taxData.forEach((tax: any) => {
+          const amount = safeNumber(tax.amount);
+          if (amount > 0) {
+            items.push({
+              label: `${tax.taxName} @ (${tax.taxPercent}%)`,
+              value: amount,
+              isSubItem: true
+            });
+          }
+        });
+      } else {
+        // Object format: { cgst, sgst, igst, cgstPercent, sgstPercent, igstPercent }
+        const cgst = safeNumber(taxData.cgst);
+        const sgst = safeNumber(taxData.sgst);
+        const igst = safeNumber(taxData.igst);
+
+        if (cgst > 0) {
+          const cgstPercent = taxData.cgstPercent || 2.5;
+          items.push({
+            label: `CGST @ (${cgstPercent}%)`,
+            value: cgst,
+            isSubItem: true
+          });
+        }
+
+        if (sgst > 0) {
+          const sgstPercent = taxData.sgstPercent || 2.5;
+          items.push({
+            label: `SGST @ (${sgstPercent}%)`,
+            value: sgst,
+            isSubItem: true
+          });
+        }
+
+        if (igst > 0) {
+          const igstPercent = taxData.igstPercent || 5;
+          items.push({
+            label: `IGST @ (${igstPercent}%)`,
+            value: igst,
+            isSubItem: true
+          });
+        }
+      }
+    } catch (error) {
+      console.error('Error parsing taxes:', error);
+
+      const totalTaxAmount = safeNumber(monthlyInvoice.totalTaxAmount);
+      if (totalTaxAmount > 0) {
+        items.push({
+          label: 'Tax',
+          value: totalTaxAmount,
+          isSubItem: true
+        });
+      }
+    }
+  }
+  const capitalize = (text: string) => {
+  if (!text) return "";
+  return text.charAt(0).toUpperCase() + text.slice(1);
+};
+   // Extra Charges
+  // const extraChargeType = monthlyInvoice.extraChargeType || 'Extra Charges';
+  // const extraChargesInputAmount = safeNumber(monthlyInvoice.extraChargesInputAmount);
+  // if (extraChargesInputAmount > 0) {
+  //   items.push({
+  //     label: `extra-Charges `,
+  //     value: extraChargesInputAmount
+  //   });
+  // }
+// Extra Charges (toll / permit / parking)
+const extraCharges = monthlyInvoice.extraCharges;
+
+if (extraCharges) {
+  try {
+    const chargeData =
+      typeof extraCharges === "string" ? JSON.parse(extraCharges) : extraCharges;
+
+    if (Array.isArray(chargeData)) {
+      chargeData.forEach((charge: any) => {
+        const amount = safeNumber(charge.amount);
+
+        if (amount > 0) {
+          items.push({
+            label: `${capitalize(charge.type)} Charges`,
+            value: amount,
+            isSubItem: true
+          });
+        }
+      });
+    }
+  } catch (error) {
+    console.error("Error parsing extraCharges:", error);
+  }
+}
+   // Discount
+  const discount = safeNumber(monthlyInvoice.discount);
+  if (discount > 0) {
+    items.push({
+      label: 'Discount',
+      value: -discount,
+      isNegative: true
+    });
+  }
+
+  // Grand Total
+  const finalTotal = safeNumber(monthlyInvoice.finalTotal);
+  items.push({
+    label: 'Grand Total',
+    value: finalTotal,
+    isSubTotal: true
+  });
+
+ 
+
+  // Advance
+  const advance = safeNumber(monthlyInvoice.advance);
+  if (advance > 0) {
+    items.push({
+      label: 'Advance Paid',
+      value: -advance,
+      isNegative: true
+    });
+  }
+
+  // Balance Due
+  const balanceDue = safeNumber(monthlyInvoice.balanceDue);
+  items.push({
+    label: 'Total',
+    value: balanceDue,
+    isTotal: true
+  });
+
+  return items;
+};
+
+// Format date helper
+const formatDate = (dateString: string | Date): string => {
+  const d = typeof dateString === 'string' ? new Date(dateString) : dateString;
+
+  const istDate = new Date(
+    d.toLocaleString("en-US", { timeZone: "Asia/Kolkata" })
+  );
+
+  const months = ["Jan", "Feb", "Mar", "Apr", "May", "Jun", "Jul", "Aug", "Sep", "Oct", "Nov", "Dec"];
+  const dd = String(istDate.getDate()).padStart(2, "0");
+  const mmm = months[istDate.getMonth()];
+  const yyyy = istDate.getFullYear();
+
+  return `${dd}-${mmm}-${yyyy}`;
+};
+
+// Parse tax details from database
+const parseTaxDetails = (taxes: any): TaxItem[] => {
+  const taxItems: TaxItem[] = [];
+  
+  if (!taxes) {
+    return taxItems;
+  }
+
+  try {
+    const taxData = typeof taxes === 'string' ? JSON.parse(taxes) : taxes;
+
+    // Handle array format: [{ taxId, amount, taxName, taxPercent }, ...]
+    if (Array.isArray(taxData)) {
+      taxData.forEach((tax: any) => {
+        const amount = safeNumber(tax.amount);
+        if (amount > 0) {
+          taxItems.push({
+            taxId: tax.taxId || '',
+            amount: amount,
+            taxName: tax.taxName || 'Tax',
+            taxPercent: tax.taxPercent || 0
+          });
+        }
+      });
+    } else {
+      // Handle object format: { cgst, sgst, igst, cgstPercent, sgstPercent, igstPercent }
+      const cgst = safeNumber(taxData.cgst);
+      const sgst = safeNumber(taxData.sgst);
+      const igst = safeNumber(taxData.igst);
+
+      if (cgst > 0) {
+        taxItems.push({
+          taxId: taxData.cgstTaxId || '0f575325-7ed9-43de-8a25-a4b5b42e1e02',
+          amount: cgst,
+          taxName: 'CGST',
+          taxPercent: taxData.cgstPercent || 2.5
+        });
+      }
+
+      if (sgst > 0) {
+        taxItems.push({
+          taxId: taxData.sgstTaxId || '024ea3ce-0fe9-4d67-8d2c-f3399255ae6e',
+          amount: sgst,
+          taxName: 'SGST',
+          taxPercent: taxData.sgstPercent || 2.5
+        });
+      }
+
+      if (igst > 0) {
+        taxItems.push({
+          taxId: taxData.igstTaxId || '',
+          amount: igst,
+          taxName: 'IGST',
+          taxPercent: taxData.igstPercent || 5
+        });
+      }
+    }
+  } catch (error) {
+    console.error('Error parsing taxes for display:', error);
+  }
+
+  return taxItems;
+};
+
+
+// Map monthly invoice data to invoice format
+export const mapMonthlyInvoiceData = (monthlyInvoice: any): InvoiceData => {
+  const lineItems = buildMonthlyLineItems(monthlyInvoice);
+
+  // Get company address from the included company relation
+  const companyAddress = monthlyInvoice?.companyAddress || 'N/A';
+  const companyGstNo = monthlyInvoice?.company?.gstNo || 'N/A';
+  
+  // Parse tax details
+  const taxDetails = parseTaxDetails(monthlyInvoice.taxes);
+  
+  console.log("Company Address:", companyAddress);
+  console.log("Tax Details:", taxDetails);
+   // Calculate total due for amount in words
+  const totalDue = safeNumber(monthlyInvoice?.balanceDue);
+  const amountInWords = numberToWords(totalDue);  // ADD THIS LINE
+
+
+
+  return {
+    invoiceNumber: monthlyInvoice.invoice?.invoiceNumber || 'N/A',
+    invoiceDate: monthlyInvoice.invoiceDate
+      ? formatDate(monthlyInvoice.invoiceDate)
+      : formatDate(new Date()),
+    invoiceMonth: formatInvoiceMonth(monthlyInvoice?.invoiceMonth) || 'N/A',
+    gstNo: monthlyInvoice.company?.gstNo || '33AAMCG2518C1Z0',
+    vehicleType: monthlyInvoice.vehicleTypeName || 'N/A',
+    vehicleNumber: monthlyInvoice.vehicleNumber || 'N/A',
+    companyName: monthlyInvoice.companyName || 'N/A',
+    companyAddress: companyAddress,
+    route: monthlyInvoice.route || 'N/A',
+    lineItems,
+    companyGstNo: companyGstNo,
+    taxDetails: taxDetails,
+     amountInWords: amountInWords
+  };
+};
+
+// Main API endpoint to generate MONTHLY Invoice PDF
+export const monthGenerateInvoicePDF = async (req: any, res: Response) => {
+  try {
+    const { monthlyInvoiceId } = req.body;
+    const role = req.role;
+
+    if (role === ROLES.DRIVER) {
+      return res.status(403).json({ message: 'Not Authorized' });
+    }
+
+    if (!monthlyInvoiceId) {
+      return res.status(400).json({
+        success: false,
+        message: "monthlyInvoiceId is required in request body.",
+      });
+    }
+
+    // Fetch monthly invoice data
+ const monthlyInvoice = await MonthlyInvoice.findByPk(monthlyInvoiceId, {
+  include: [
+    {
+      model: Company,
+      as: "company",
+      required: false,
+      attributes: [
+        "companyName",
+        "companyAddress",
+        "companyPhno",
+        "gstNo",
+        "managerEmail",
+      ],
+    },
+    {
+      model: Invoice,
+      attributes: ["invoiceId", "invoiceNumber"],
+      required: false,
+    },
+  ],
+});
+
+    if (!monthlyInvoice) {
+      return res.status(404).json({
+        success: false,
+        message: "Monthly Invoice not found.",
+      });
+    }
+// managerEmail is stored as JSON string array
+let managerEmails: string[] = [];
+
+const rawManagerEmail = monthlyInvoice.company?.managerEmail;
+
+if (rawManagerEmail) {
+  try {
+    const parsed = JSON.parse(rawManagerEmail);
+    managerEmails = Array.isArray(parsed) ? parsed : [parsed];
+  } catch {
+    managerEmails = [rawManagerEmail];
+  }
+}
+
+let managerAddress = "N/A";
+  console.log("managerEmail ", managerEmails);
+if (managerEmails) {
+  //console.log("managerEmail if", managerEmail);
+  const managerUser = await User.unscoped().findOne({
+    where: { 
+        email: { [Op.in]: managerEmails.map(e => e.trim()) },
+    },
+    attributes: ["userAddress"],
+  }); 
+  //console.log("manageruser if", managerUser);
+
+  managerAddress = managerUser?.userAddress || "N/A";
+  //console.log("manageraddres ", managerAddress);
+}
+
+// ✅ SAVE address into monthly_invoice
+await monthlyInvoice.update({
+//  companyAddress: managerAddress,
+  companyAddress: monthlyInvoice.company?.companyAddress || managerAddress || "N/A",
+});
+//console.log("67890 ", managerAddress);
+
+    const invoiceData = mapMonthlyInvoiceData(monthlyInvoice);
+    const htmlContent = generateMonthlyInvoiceHTML(invoiceData);
+
+    const uploadsDir = path.join(process.cwd(), 'uploads', 'invoices', 'monthly');
+    if (!fs.existsSync(uploadsDir)) {
+      fs.mkdirSync(uploadsDir, { recursive: true });
+    }
+
+    const browser = await puppeteer.launch({
+      headless: true,
+      args: ['--no-sandbox', '--disable-setuid-sandbox']
+    });
+
+    const page = await browser.newPage();
+    //await page.setContent(htmlContent, { waitUntil: 'networkidle0' });
+    await page.setContent(htmlContent, {
+  waitUntil: 'domcontentloaded',
+  timeout: 0
+});
+
+    const pdfFileName = `monthly_invoice_${monthlyInvoiceId}_${Date.now()}.pdf`;
+    const pdfPath = path.join(uploadsDir, pdfFileName);
+
+    await page.pdf({
+      path: pdfPath,
+      format: 'A4',
+      printBackground: true,
+      margin: {
+        top: '8mm',
+        bottom: '8mm',
+        left: '8mm',
+        right: '8mm'
+      },
+      preferCSSPageSize: true
+    });
+
+    await browser.close();
+
+    const token = jwt.sign(
+      { fileName: pdfFileName },
+      JWT_SECRET,
+      { expiresIn: "5m" }
+    );
+
+    // const downloadUrl = `${req.protocol}://${req.get("host")}/app/appInvoiceRoutes/download/month-invoice/${pdfFileName}?token=${token}`;
+
+    const protocol =
+  req.headers["x-forwarded-proto"] === "https" ? "https" : req.protocol;
+
+const downloadUrl = `${protocol}://${req.get("host")}/app/appInvoiceRoutes/download/month-invoice/${pdfFileName}?token=${token}`;
+
+    return res.status(200).json({
+      success: true,
+      message: "Monthly Invoice PDF generated successfully.",
+      data: {
+        downloadUrl,
+        fileName: pdfFileName,
+        monthlyInvoiceId,
+        invoiceData
+      }
+    });
+
+  } catch (error) {
+    console.error("[GENERATE_MONTHLY_INVOICE_PDF_ERROR]", error);
+    return res.status(500).json({
+      success: false,
+      message: "An error occurred while generating the monthly invoice PDF.",
+      error: (error as Error).message,
+    });
+  }
+};
+
+// Download monthly invoice PDF
+export const monthDownloadInvoicePDF = async (req: Request, res: Response) => {
+  try {
+    const { fileName } = req.params;
+
+    if (!fileName) {
+      return res.status(400).json({
+        success: false,
+        message: "fileName is required.",
+      });
+    }
+
+    const pdfPath = path.join(process.cwd(), 'uploads', 'invoices', 'monthly', fileName);
+
+    if (!fs.existsSync(pdfPath)) {
+      return res.status(404).json({
+        success: false,
+        message: "Monthly Invoice PDF not found.",
+      });
+    }
+
+    res.setHeader('Content-Type', 'application/pdf');
+    res.setHeader('Content-Disposition', `attachment; filename="${fileName}"`);
+
+    const fileStream = fs.createReadStream(pdfPath);
+
+    fileStream.on('error', (error) => {
+      console.error("[FILE_STREAM_ERROR]", error);
+      if (!res.headersSent) {
+        return res.status(500).json({
+          success: false,
+          message: "Error reading the file.",
+        });
+      }
+    });
+
+    fileStream.pipe(res);
+
+    fileStream.on('end', () => {
+      console.log(`Monthly PDF ${fileName} downloaded successfully`);
+    });
+
+  } catch (error) {
+    console.error("[DOWNLOAD_MONTHLY_INVOICE_PDF_ERROR]", error);
+    return res.status(500).json({
+      success: false,
+      message: "An error occurred while downloading the monthly invoice PDF.",
+      error: (error as Error).message,
+    });
+  }
+};

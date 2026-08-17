@@ -1,0 +1,105 @@
+@media (min-width: 425px) and (max-width: 768px) {
+
+  .about-driver {
+    transform: scale(1.22) translateX(0px) translateY(-20px); /* CENTER */
+    margin-right: 0px;  /* REMOVE PUSHING */
+    margin-left: 0px;
+  }
+
+  .about-badge {
+    right:0%;      
+    transform: translateX(50%) scale(1.32); /* CENTER BADGE */
+    bottom: 85px !important;
+  }
+
+}
+@media (min-width: 636px) and (max-width: 767px) {
+  .md-section {
+    padding-top: 80px !important;
+    text-align: center !important;
+  }
+
+  .md-photo-wrap {
+    position: relative !important;
+    top: 0 !important;
+    left: 0 !important;
+    transform: none !important;
+    display: flex !important;
+    justify-content: center !important;
+    margin-top: 0 !important;
+    margin-bottom: 20px !important;
+  }
+
+  .md-photo-image {
+    width: 110px !important;
+    height: 110px !important;
+  }
+
+  .md-title {
+    margin-top: 15px !important;
+    text-align: center !important;
+  }
+
+  .md-info-box {
+    margin: 0 auto !important;
+    margin-top: 20px !important;
+  }
+}
+
+/* 📌 768px – 1023px : PHOTO LEFT + FULL CONTENT RIGHT */
+@media (min-width: 768px) and (max-width: 1023px) {
+
+  /* wrapper → side-by-side layout */
+  .md-wrapper {
+    display: flex !important;
+    flex-direction: row !important;
+    align-items: flex-start !important;
+    justify-content: flex-start !important;
+    gap: 30px !important;
+    text-align: left !important;
+    width: 100% !important;
+  }
+
+  /* photo LEFT */
+  .md-photo-wrap {
+    position: relative !important;
+    top: 0 !important;
+    left: 0 !important;
+    transform: none !important;
+    margin: 0 !important;
+  }
+
+  .md-photo-image {
+    width: 150px !important;
+    height: 150px !important;
+  }
+
+  /* right block full width */
+  .md-right-block {
+    width: 100% !important;
+    text-align: left !important;
+    margin-top: 0 !important;
+  }
+
+  /* title right side */
+  .md-title {
+    text-align: left !important;
+    margin: 0 !important;
+    margin-bottom: 15px !important;
+  }
+
+  /* Dr. Robert text right side */
+  .md-name-block {
+    text-align: left !important;
+    margin: 0 !important;
+    margin-bottom: 15px !important;
+  }
+
+  /* blue box full right */
+  .md-info-box {
+    width: 80% !important;
+    margin-left: 0 !important;
+    margin-bottom: 20px !important;
+  }
+}
+

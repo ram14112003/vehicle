@@ -8,18 +8,23 @@ import {
   getAllVehicleTypesforWeb,
   getVehicleTypeWithVehicles,
   getAllVehicleTypeByType,
-  calculateFare
+  calculateFare,
+  calculateDistance,
+  updateVehiclePricing
 } from '../services/vehicleTypeServices';
 import { authMiddleware } from '../middleware/authMiddleware';
 import { uploadVehicleImg } from "../middleware/uploadConfig";
 
 const router = express.Router();
 
-// Public fleet & fare routes
+// Public fleet, distance & fare routes
 router.get('/getAllVehicleType', getAllVehicleTypes);
 router.get('/getAllVehicleTypesforWeb', getAllVehicleTypesforWeb);
 router.get("/vehicleTypeWithVehicles", getVehicleTypeWithVehicles);
+router.post('/calculate-distance', calculateDistance);
 router.post('/calculate-fare', calculateFare);
+router.put('/:id/pricing', updateVehiclePricing);
+router.put('/pricing/update', updateVehiclePricing);
 
 // Protected vehicle routes
 router.get('/getAllVehicleTypeByType', authMiddleware, getAllVehicleTypeByType);
@@ -28,4 +33,5 @@ router.put('/:id/update', authMiddleware, uploadVehicleImg.array("vehicleImg", 5
 router.delete('/:id/delete', authMiddleware, deleteVehicleType);
 router.patch('/:id/restore', authMiddleware, restoreVehicleType);
 
-export default router;
+export default router;
+

@@ -1,365 +1,364 @@
-// import React, { useState } from 'react';
-// import { FontAwesomeIcon } from '@fortawesome/react-fontawesome';
-// import { faCar, faClock, faPlusCircle, faTruck, faUsers } from '@fortawesome/free-solid-svg-icons';
-// import PageLayout from '../../../../components/PageLayout';
-// import CommonButton from '../../../../components/CommonButton';
-// import InputBox from '../../../../components/InputBox';
-// import { showToast, AlertContainer } from '../../../../components/AlertBox';
-// import axiosInstance from '../../../../utils/axiosInstance';
-// import { useNavigate } from 'react-router-dom';
-
-// const AddVehicleType: React.FC = () => {
-//   const navigate = useNavigate();
-//   const [vehicleType, setVehicleType] = useState('');
-//   const [advanceBookingHours, setAdvanceBookingHours] = useState('');
-//   const [seatCapacity, setSeatCapacity] = useState('');
-//   const [errors, setErrors] = useState<{ vehicleType?: string; advanceBookingHours?: string; seatCapacity?: string }>({});
-//   const [loading, setLoading] = useState(false);
-
-//   const handleSubmit = async (e: React.FormEvent) => {
-//     e.preventDefault();
-//     const newErrors: typeof errors = {};
-
-//     if (!vehicleType.trim()) {
-//       newErrors.vehicleType = 'Vehicle Type is required';
-//     }
-//     if (!advanceBookingHours.trim()) {
-//       newErrors.advanceBookingHours = 'Advance Booking Hours is required';
-//     }
-//     if (!seatCapacity.trim()) {
-//       newErrors.seatCapacity = 'Seat Capacity is required';
-//     }
-
-//     setErrors(newErrors);
-
-//     if (Object.keys(newErrors).length === 0) {
-//       try {
-//         setLoading(true);
-
-//         const payload = {
-//           vehicleType,
-//           AdvanceBookingHours: advanceBookingHours, // match backend
-//           seatCapacity: Number(seatCapacity),
-//         };
-
-//         const res = await axiosInstance.post('/vendor/createVehicleType', payload);
-
-//         if (res.status === 201) {
-//           showToast('Vehicle Type added successfully!', 'success');
-//           setVehicleType('');
-//           setAdvanceBookingHours('');
-//           setSeatCapacity('');
-
-//           setTimeout(() => {
-//             navigate('/vehicle/vehicletype/list');
-//           }, 1000);
-//         }
-//       } catch (err: any) {
-//         const errorMsg = err.response?.data?.message || 'Something went wrong. Please try again.';
-//         showToast(errorMsg, 'error');
-//       } finally {
-//         setLoading(false);
-//       }
-//     }
-//   };
-
-//   return (
-//     <PageLayout>
-//       <AlertContainer />
-//       <main className="py-6">
-//         <h1 className="text-3xl font-bold text-gray-800">Add Vehicle Type</h1>
-//         <div className="text-lg font-semibold text-[#275981] py-5 underline">
-//           <FontAwesomeIcon icon={faTruck} /> Vehicle Master Info
-//         </div>
-
-//         <form onSubmit={handleSubmit} className="space-y-6">
-//           <div className="grid grid-cols-1 md:grid-cols-2 gap-x-16 gap-y-6">
-//             <InputBox
-//               label="Vehicle Type"
-//               name="vehicleType"
-//               required
-//               placeholder="Enter a vehicle type"
-//               icon={faCar}
-//               value={vehicleType}
-//               onChange={(name, value) => setVehicleType(value)}
-//               error={errors.vehicleType}
-//             />
-
-//             <InputBox
-//               label="Advance Booking Hours"
-//               name="advanceBookingHours"
-//               type="number"
-//               required
-//               placeholder="Enter advance booking hours"
-//               icon={faClock}
-//               value={advanceBookingHours}
-//               onChange={(name, value) => setAdvanceBookingHours(value)}
-//               error={errors.advanceBookingHours}
-//             />
-
-//             <InputBox
-//               label="Seat Capacity"
-//               name="seatCapacity"
-//               type="number"
-//               required
-//               placeholder="Enter seat capacity"
-//               icon={faUsers}
-//               value={seatCapacity}
-//               onChange={(name, value) => setSeatCapacity(value)}
-//               error={errors.seatCapacity}
-//             />
-//           </div>
-
-//           <div className="flex justify-end">
-//             <CommonButton
-//               type="submit"
-//               variant="success"
-//               className="px-6 py-2 text-lg"
-//               disabled={loading}
-//             >
-//               <FontAwesomeIcon icon={faPlusCircle} className="mr-2" />
-//               {loading ? 'Submitting...' : 'Submit'}
-//             </CommonButton>
-//           </div>
-//         </form>
-//       </main>
-//     </PageLayout>
-//   );
-// };
-
-// export default AddVehicleType;
-
-
-
 import React, { useState } from 'react';
-import { FontAwesomeIcon } from '@fortawesome/react-fontawesome';
-import { faCar, faClock, faPlusCircle, faTruck, faUsers } from '@fortawesome/free-solid-svg-icons';
 import PageLayout from '../../../../components/PageLayout';
-import CommonButton from '../../../../components/CommonButton';
-import InputBox from '../../../../components/InputBox';
 import { showToast, AlertContainer } from '../../../../components/AlertBox';
 import axiosInstance from '../../../../utils/axiosInstance';
-import { useNavigate } from 'react-router-dom';
+import { useNavigate, Link } from 'react-router-dom';
+import {
+  Car,
+  Users,
+  Clock,
+  IndianRupee,
+  ArrowLeft,
+  AlertCircle,
+  Save,
+  RefreshCw,
+  Image as ImageIcon
+} from 'lucide-react';
+
 
 const AddVehicleType: React.FC = () => {
   const navigate = useNavigate();
+
   const [vehicleType, setVehicleType] = useState('');
-  const [seatCapacity, setSeatCapacity] = useState('');
-  const [priorMinutes, setPriorMinutes] = useState(''); // ✅ NEW
+  const [seatCapacity, setSeatCapacity] = useState('4');
+  const [priorMinutes, setPriorMinutes] = useState('30');
+  const [baseFare, setBaseFare] = useState('250');
+  const [perKmRate, setPerKmRate] = useState('14');
+  const [selectedImage, setSelectedImage] = useState<File | null>(null);
+  const [imagePreview, setImagePreview] = useState<string | null>(null);
+
   const [errors, setErrors] = useState<{
     vehicleType?: string;
-    advanceBookingHours?: string;
     seatCapacity?: string;
-    priorMinutes?: string; // ✅ NEW
+    priorMinutes?: string;
+    baseFare?: string;
+    perKmRate?: string;
   }>({});
+
   const [loading, setLoading] = useState(false);
-const [vehicleImages, setVehicleImages] = useState<File[]>([]);
-const MAX_FILE_SIZE = 5 * 1024 * 1024; // 5MB
 
- const handleSubmit = async (e: React.FormEvent) => {
-  e.preventDefault();
-
-  const newErrors: typeof errors = {};
-  if (!vehicleType.trim()) newErrors.vehicleType = "Vehicle Type is required";
-  if (!seatCapacity.trim()) newErrors.seatCapacity = "Seat Capacity is required";
-  if (!priorMinutes.trim())
-    newErrors.priorMinutes = "Advance Booking Hours is required";
-
-  setErrors(newErrors);
-  if (Object.keys(newErrors).length !== 0) return;
-
-  try {
-    setLoading(true);
-
-    const formData = new FormData();
-    formData.append("vehicleType", vehicleType);
-    formData.append("seatCapacity", seatCapacity);
-    formData.append("priorMinutes", priorMinutes);
-
-    vehicleImages.forEach((file) => {
-      formData.append("vehicleImg", file); // 🔥 same name as backend
-    });
-
-    const res = await axiosInstance.post(
-      "/vendor/createVehicleType",
-      formData,
-      {
-        headers: { "Content-Type": "multipart/form-data" },
+  const handleImageChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+    if (e.target.files && e.target.files[0]) {
+      const file = e.target.files[0];
+      if (file.size > 5 * 1024 * 1024) {
+        showToast('Image size exceeds 5MB limit', 'error');
+        return;
       }
-    );
-
-    if (res.status === 201) {
-      showToast("Vehicle Type added successfully!", "success");
-      navigate("/vehicle/vehicletype/list");
+      setSelectedImage(file);
+      setImagePreview(URL.createObjectURL(file));
     }
-  } catch (err: any) {
-    showToast(
-      err.response?.data?.message || "Something went wrong",
-      "error"
-    );
-  } finally {
-    setLoading(false);
-  }
-};
+  };
 
-const handleImageChange = (e: React.ChangeEvent<HTMLInputElement>) => {
-  const files = e.target.files ? Array.from(e.target.files) : [];
+  const validateForm = () => {
+    const errs: typeof errors = {};
 
-  if (files.length === 0) return;
-
-  const validFiles: File[] = [];
-
-  for (let file of files) {
-    // ❌ size check
-    if (file.size > MAX_FILE_SIZE) {
-      showToast(
-        `❌ ${file.name} size 5MB-ku mela irukku`,
-        "error"
-      );
-      return; // stop here, images set aagathu
+    if (!vehicleType.trim()) {
+      errs.vehicleType = 'Vehicle category / name is required';
+    }
+    const seats = parseInt(seatCapacity);
+    if (isNaN(seats) || seats < 1 || seats > 50) {
+      errs.seatCapacity = 'Enter a valid passenger capacity (1 - 50)';
+    }
+    const prior = parseInt(priorMinutes);
+    if (isNaN(prior) || prior < 0) {
+      errs.priorMinutes = 'Enter valid advance notice in minutes';
+    }
+    const base = parseFloat(baseFare);
+    if (isNaN(base) || base < 10) {
+      errs.baseFare = 'Base Fare must be at least ₹10';
+    }
+    const rate = parseFloat(perKmRate);
+    if (isNaN(rate) || rate < 1) {
+      errs.perKmRate = 'Rate per KM must be at least ₹1/km';
     }
 
-    // ❌ type check (extra safety)
-    if (!file.type.startsWith("image/")) {
-      showToast("❌ Only image files allowed", "error");
+    setErrors(errs);
+    return Object.keys(errs).length === 0;
+  };
+
+  const handleSubmit = async (e: React.FormEvent) => {
+    e.preventDefault();
+
+    if (!validateForm()) {
+      showToast('Please fix the errors before saving', 'error');
       return;
     }
 
-    validFiles.push(file);
-  }
+    try {
+      setLoading(true);
 
-  setVehicleImages(validFiles); // ✅ only valid images
-};
+      const formData = new FormData();
+      formData.append('vehicleType', vehicleType.trim());
+      formData.append('seatCapacity', seatCapacity);
+      formData.append('priorMinutes', priorMinutes);
+      formData.append('baseFare', baseFare);
+      formData.append('perKmRate', perKmRate);
+
+      if (selectedImage) {
+        formData.append('vehicleImg', selectedImage);
+      }
+
+      const res = await axiosInstance.post('/vendor/createVehicleType', formData, {
+        headers: { 'Content-Type': 'multipart/form-data' }
+      });
+
+      if (res.status === 201 || res.data?.vehiType) {
+        showToast(`Vehicle Category "${vehicleType}" added successfully!`, 'success');
+        setTimeout(() => {
+          navigate('/vehicle/vehicletype/list');
+        }, 600);
+      } else {
+        showToast(res.data?.message || 'Failed to add vehicle type', 'error');
+      }
+    } catch (err: any) {
+      console.error('Error adding vehicle type:', err);
+      const msg = err.response?.data?.message || 'Failed to create vehicle type. Please try again.';
+      showToast(msg, 'error');
+    } finally {
+      setLoading(false);
+    }
+  };
 
   return (
     <PageLayout>
       <AlertContainer />
-      <main className="py-6">
-        <h1 className="text-3xl font-bold text-gray-800">Add Vehicle Type</h1>
-        <div className="text-lg font-semibold text-[#275981] py-5 underline">
-          <FontAwesomeIcon icon={faTruck} /> Vehicle Master Info
+      <div className="max-w-4xl mx-auto space-y-6 pb-12">
+        {/* Top Header */}
+        <div className="flex items-center justify-between bg-white p-6 rounded-3xl border border-slate-200/80 shadow-sm">
+          <div className="flex items-center gap-3">
+            <Link
+              to="/vehicle/vehicletype/list"
+              className="w-10 h-10 rounded-2xl bg-slate-100 hover:bg-slate-200 flex items-center justify-center text-slate-700 transition-colors"
+            >
+              <ArrowLeft size={18} />
+            </Link>
+            <div>
+              <h1 className="text-2xl font-black text-slate-900">Add Vehicle Category</h1>
+              <p className="text-xs text-slate-500 mt-0.5">
+                Register a new vehicle type with dynamic pricing and capacity rules.
+              </p>
+            </div>
+          </div>
         </div>
 
+        {/* Main Form */}
         <form onSubmit={handleSubmit} className="space-y-6">
-          <div className="grid grid-cols-1 md:grid-cols-2 gap-x-16 gap-y-6">
-            <InputBox
-              label="Vehicle Type"
-              name="vehicleType"
-              required
-              placeholder="Enter a vehicle type"
-              icon={faCar}
-              value={vehicleType}
-              onChange={(name, value) => setVehicleType(value)}
-              error={errors.vehicleType}
-            />
+          {/* Section 1: Basic Information */}
+          <div className="bg-white p-6 rounded-3xl border border-slate-200/80 shadow-sm space-y-5">
+            <div className="flex items-center gap-2 border-b border-slate-100 pb-3">
+              <Car className="text-amber-500" size={20} />
+              <h2 className="text-base font-black text-slate-900">Vehicle Information</h2>
+            </div>
 
-          
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-5">
+              <div>
+                <label className="block text-xs font-extrabold uppercase tracking-wider text-slate-600 mb-1.5">
+                  Vehicle Name / Category <span className="text-rose-500">*</span>
+                </label>
+                <input
+                  type="text"
+                  value={vehicleType}
+                  onChange={(e) => setVehicleType(e.target.value)}
+                  placeholder="e.g. Sedan Prime, SUV / Innova, Luxury"
+                  className={`w-full px-4 py-2.5 rounded-2xl bg-slate-50 border text-xs font-bold text-slate-900 focus:bg-white focus:outline-none transition-colors ${
+                    errors.vehicleType ? 'border-rose-400 focus:border-rose-500' : 'border-slate-200 focus:border-amber-500'
+                  }`}
+                />
+                {errors.vehicleType && (
+                  <p className="text-[11px] font-bold text-rose-500 mt-1 flex items-center gap-1">
+                    <AlertCircle size={12} /> {errors.vehicleType}
+                  </p>
+                )}
+              </div>
 
-            <InputBox
-              label="Seat Capacity"
-              name="seatCapacity"
-              type="number"
-              required
-              placeholder="Enter seat capacity"
-              icon={faUsers}
-              value={seatCapacity}
-              onChange={(name, value) => setSeatCapacity(value)}
-              error={errors.seatCapacity}
-            />
-
-
-            {/* ✅ NEW FIELD */}
-         <InputBox
-  label="Advance Booking Hours"
-  name="priorMinutes"
-  type="number"
-  required
-  placeholder="Enter Advance Booking Hours"
-  icon={faClock}
-  value={priorMinutes}
-  onChange={(name, value) => setPriorMinutes(value)}
-  error={errors.priorMinutes}
-/>
-<div>
-  <label className="block text-sm font-medium text-black mb-1">
-    Vehicle Image
-  </label>
-
- <input
-  type="file"
-  multiple
-  accept="image/*"
-  onChange={(e) => {
-    const files = e.target.files ? Array.from(e.target.files) : [];
-    if (files.length === 0) return;
-
-    const validFiles: File[] = [];
-
-    for (let file of files) {
-      // 🔥 size check
-      if (file.size > MAX_FILE_SIZE) {
-        showToast(
-          `${file.name} is too large! Please select below 5 MB.`,
-          "error"
-        );
-        e.target.value = ""; // reset input so user can reselect
-        return; // stop processing
-      }
-
-      // 🔥 type check
-      if (!file.type.startsWith("image/")) {
-        showToast("Only image files allowed", "error");
-        e.target.value = "";
-        return;
-      }
-
-      validFiles.push(file);
-    }
-
-    setVehicleImages(validFiles);
-  }}
-  className="block w-full border border-gray-300 rounded-lg p-2"
-/>
-
-
-  {vehicleImages.length > 0 && (
-  <div className="grid grid-cols-2 md:grid-cols-3 gap-4 mt-4">
-    {vehicleImages.map((file, index) => (
-      <div
-        key={index}
-        className="relative border rounded-lg overflow-hidden"
-      >
-        <img
-          src={URL.createObjectURL(file)}
-          alt={`preview-${index}`}
-          className="w-full h-32 object-cover"
-        />
-
-        <p className="text-xs text-center p-1 truncate">
-          {file.name}
-        </p>
-      </div>
-    ))}
-  </div>
-)}
-
-</div>
-
+              <div>
+                <label className="block text-xs font-extrabold uppercase tracking-wider text-slate-600 mb-1.5">
+                  Seat Capacity <span className="text-rose-500">*</span>
+                </label>
+                <div className="relative">
+                  <Users className="absolute left-3.5 top-1/2 -translate-y-1/2 text-slate-400" size={16} />
+                  <input
+                    type="number"
+                    min="1"
+                    max="50"
+                    value={seatCapacity}
+                    onChange={(e) => setSeatCapacity(e.target.value)}
+                    placeholder="4"
+                    className={`w-full pl-10 pr-4 py-2.5 rounded-2xl bg-slate-50 border text-xs font-bold text-slate-900 focus:bg-white focus:outline-none transition-colors ${
+                      errors.seatCapacity ? 'border-rose-400 focus:border-rose-500' : 'border-slate-200 focus:border-amber-500'
+                    }`}
+                  />
+                </div>
+                {errors.seatCapacity && (
+                  <p className="text-[11px] font-bold text-rose-500 mt-1 flex items-center gap-1">
+                    <AlertCircle size={12} /> {errors.seatCapacity}
+                  </p>
+                )}
+              </div>
+            </div>
           </div>
 
-          <div className="flex justify-end">
-            <CommonButton
-              type="submit"
-              variant="success"
-              className="px-6 py-2 text-lg"
+          {/* Section 2: Dynamic Pricing Rules */}
+          <div className="bg-white p-6 rounded-3xl border border-slate-200/80 shadow-sm space-y-5">
+            <div className="flex items-center gap-2 border-b border-slate-100 pb-3">
+              <IndianRupee className="text-emerald-600" size={20} />
+              <div>
+                <h2 className="text-base font-black text-slate-900">Dynamic Pricing & Booking Rules</h2>
+                <span className="text-[11px] text-slate-400 font-semibold">
+                  These pricing rates directly drive live customer fare calculations.
+                </span>
+              </div>
+            </div>
+
+            <div className="grid grid-cols-1 sm:grid-cols-3 gap-5">
+              {/* Base Fare */}
+              <div>
+                <label className="block text-xs font-extrabold uppercase tracking-wider text-slate-600 mb-1.5">
+                  Base Fare (₹) <span className="text-rose-500">*</span>
+                </label>
+                <div className="relative">
+                  <span className="absolute left-3.5 top-1/2 -translate-y-1/2 font-black text-slate-400 text-xs">
+                    ₹
+                  </span>
+                  <input
+                    type="number"
+                    min="10"
+                    step="10"
+                    value={baseFare}
+                    onChange={(e) => setBaseFare(e.target.value)}
+                    placeholder="250"
+                    className={`w-full pl-8 pr-4 py-2.5 rounded-2xl bg-slate-50 border text-xs font-black text-slate-900 focus:bg-white focus:outline-none transition-colors ${
+                      errors.baseFare ? 'border-rose-400 focus:border-rose-500' : 'border-slate-200 focus:border-amber-500'
+                    }`}
+                  />
+                </div>
+                {errors.baseFare && (
+                  <p className="text-[11px] font-bold text-rose-500 mt-1 flex items-center gap-1">
+                    <AlertCircle size={12} /> {errors.baseFare}
+                  </p>
+                )}
+              </div>
+
+              {/* Rate per KM */}
+              <div>
+                <label className="block text-xs font-extrabold uppercase tracking-wider text-slate-600 mb-1.5">
+                  Rate per KM (₹/km) <span className="text-rose-500">*</span>
+                </label>
+                <div className="relative">
+                  <span className="absolute left-3.5 top-1/2 -translate-y-1/2 font-black text-slate-400 text-xs">
+                    ₹
+                  </span>
+                  <input
+                    type="number"
+                    min="1"
+                    step="1"
+                    value={perKmRate}
+                    onChange={(e) => setPerKmRate(e.target.value)}
+                    placeholder="14"
+                    className={`w-full pl-8 pr-12 py-2.5 rounded-2xl bg-slate-50 border text-xs font-black text-slate-900 focus:bg-white focus:outline-none transition-colors ${
+                      errors.perKmRate ? 'border-rose-400 focus:border-rose-500' : 'border-slate-200 focus:border-amber-500'
+                    }`}
+                  />
+                  <span className="absolute right-3.5 top-1/2 -translate-y-1/2 text-xs font-bold text-slate-400">
+                    /km
+                  </span>
+                </div>
+                {errors.perKmRate && (
+                  <p className="text-[11px] font-bold text-rose-500 mt-1 flex items-center gap-1">
+                    <AlertCircle size={12} /> {errors.perKmRate}
+                  </p>
+                )}
+              </div>
+
+              {/* Prior Notice Minutes */}
+              <div>
+                <label className="block text-xs font-extrabold uppercase tracking-wider text-slate-600 mb-1.5">
+                  Advance Notice (Minutes)
+                </label>
+                <div className="relative">
+                  <Clock className="absolute left-3.5 top-1/2 -translate-y-1/2 text-slate-400" size={16} />
+                  <input
+                    type="number"
+                    min="0"
+                    step="5"
+                    value={priorMinutes}
+                    onChange={(e) => setPriorMinutes(e.target.value)}
+                    placeholder="30"
+                    className="w-full pl-10 pr-12 py-2.5 rounded-2xl bg-slate-50 border border-slate-200 text-xs font-bold text-slate-900 focus:bg-white focus:outline-none focus:border-amber-500 transition-colors"
+                  />
+                  <span className="absolute right-3.5 top-1/2 -translate-y-1/2 text-xs font-bold text-slate-400">
+                    min
+                  </span>
+                </div>
+              </div>
+            </div>
+          </div>
+
+          {/* Section 3: Vehicle Photo Upload */}
+          <div className="bg-white p-6 rounded-3xl border border-slate-200/80 shadow-sm space-y-5">
+            <div className="flex items-center gap-2 border-b border-slate-100 pb-3">
+              <ImageIcon className="text-blue-500" size={20} />
+              <h2 className="text-base font-black text-slate-900">Vehicle Photo</h2>
+            </div>
+
+            <div className="flex flex-col sm:flex-row items-center gap-6">
+              <div className="w-32 h-24 rounded-2xl bg-slate-100 border-2 border-dashed border-slate-300 flex items-center justify-center overflow-hidden flex-shrink-0">
+                {imagePreview ? (
+                  <img src={imagePreview} alt="Preview" className="w-full h-full object-cover" />
+                ) : (
+                  <div className="text-center text-slate-400 p-2">
+                    <Car size={24} className="mx-auto mb-1 opacity-50" />
+                    <span className="text-[10px] font-bold block">No image</span>
+                  </div>
+                )}
+              </div>
+
+              <div className="flex-1 w-full">
+                <label className="block text-xs font-bold text-slate-700 mb-1">
+                  Upload Vehicle Photo (JPG, PNG, WebP)
+                </label>
+                <input
+                  type="file"
+                  accept="image/*"
+                  onChange={handleImageChange}
+                  className="w-full text-xs text-slate-500 file:mr-4 file:py-2.5 file:px-4 file:rounded-xl file:border-0 file:text-xs file:font-bold file:bg-slate-900 file:text-white hover:file:bg-slate-800 cursor-pointer"
+                />
+                <span className="text-[11px] text-slate-400 block mt-1">Maximum file size: 5MB</span>
+              </div>
+            </div>
+          </div>
+
+          {/* Actions Toolbar */}
+          <div className="flex items-center justify-end gap-3 pt-2">
+            <button
+              type="button"
               disabled={loading}
+              onClick={() => navigate('/vehicle/vehicletype/list')}
+              className="px-6 py-3 rounded-2xl bg-slate-100 hover:bg-slate-200 text-slate-700 font-bold text-xs transition-colors"
             >
-              <FontAwesomeIcon icon={faPlusCircle} className="mr-2" />
-              {loading ? 'Submitting...' : 'Submit'}
-            </CommonButton>
+              Cancel
+            </button>
+
+            <button
+              type="submit"
+              disabled={loading}
+              className="px-8 py-3 rounded-2xl bg-slate-900 hover:bg-slate-800 text-white font-black text-xs shadow-lg shadow-slate-900/20 hover:-translate-y-0.5 active:translate-y-0 transition-all flex items-center gap-2 disabled:opacity-50"
+            >
+              {loading ? (
+                <>
+                  <RefreshCw size={14} className="animate-spin" />
+                  <span>Saving vehicle...</span>
+                </>
+              ) : (
+                <>
+                  <Save size={14} />
+                  <span>Save Vehicle Category</span>
+                </>
+              )}
+            </button>
           </div>
         </form>
-      </main>
+      </div>
     </PageLayout>
   );
 };

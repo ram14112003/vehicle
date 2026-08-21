@@ -531,9 +531,52 @@ export const getAllVehicleTypeByType = async (req: Request, res: Response) => {
   }
 };
 
+import { calculateRouteDistance } from "../utils/distanceCalculator";
+
+export const calculateDistance = async (req: Request, res: Response) => {
+  try {
+    const { pickup = "", drop = "", pickupLat, pickupLng, dropLat, dropLng } = req.body;
+    const pCoords = pickupLat && pickupLng ? { lat: Number(pickupLat), lng: Number(pickupLng) } : undefined;
+    const dCoords = dropLat && dropLng ? { lat: Number(dropLat), lng: Number(dropLng) } : undefined;
+
+    const result = await calculateRouteDistance(pickup, drop, pCoords, dCoords);
+
+    return res.status(200).json({
+      success: true,
+      data: {
+        pickup,
+        drop,
+        distanceKm: result.distanceKm,
+        durationMins: result.durationMins,
+        routeSummary: result.routeSummary
+      }
+    });
+  } catch (error: any) {
+    console.error("Calculate Distance Error:", error);
+    return res.status(500).json({
+      success: false,
+      message: "Failed to calculate distance",
+      error: error.message
+    });
+  }
+};
+
 export const calculateFare = async (req: Request, res: Response) => {
   try {
-    const { vehicleTypeId, distanceKm = 20, tripType = "oneway" } = req.body;
+    const { vehicleTypeId, pickup, drop, distanceKm, tripType = "oneway" } = req.body;
+
+    let dist = Number(distanceKm);
+    let durationMins = Math.round((dist || 20) * 1.8);
+
+    if ((!dist || isNaN(dist)) && pickup && drop) {
+      const route = await calculateRouteDistance(pickup, drop);
+      dist = route.distanceKm;
+      durationMins = route.durationMins;
+    } else if (!dist || isNaN(dist)) {
+      dist = 20;
+    }
+
+    dist = Math.max(dist, 1);
 
     let vType = null;
     if (vehicleTypeId) {
@@ -545,27 +588,18 @@ export const calculateFare = async (req: Request, res: Response) => {
     const seats = vType?.seatCapacity || 4;
     const typeName = vType?.vehicleType?.toLowerCase() || "";
 
-    let baseFare = 250;
-    let perKmRate = 14;
+    // Dynamic Base Fare & Per KM Rate from DB VehicleType
+    const baseFare = (vType?.baseFare !== undefined && vType?.baseFare !== null && Number(vType.baseFare) > 0)
+      ? Number(vType.baseFare)
+      : 250;
+    const perKmRate = (vType?.perKmRate !== undefined && vType?.perKmRate !== null && Number(vType.perKmRate) > 0)
+      ? Number(vType.perKmRate)
+      : 14;
 
-    if (typeName.includes("suv") || typeName.includes("innova") || seats >= 6) {
-      baseFare = 450;
-      perKmRate = 19;
-    } else if (typeName.includes("hatch") || typeName.includes("mini")) {
-      baseFare = 180;
-      perKmRate = 12;
-    } else if (typeName.includes("luxury") || typeName.includes("camry") || typeName.includes("mercedes")) {
-      baseFare = 800;
-      perKmRate = 28;
-    } else if (typeName.includes("tempo") || seats >= 10) {
-      baseFare = 1200;
-      perKmRate = 24;
-    }
-
-    const dist = Math.max(Number(distanceKm) || 10, 1);
     const tripMultiplier = tripType === "roundtrip" ? 1.8 : 1.0;
     const distanceFare = Math.round(dist * perKmRate * tripMultiplier);
-    const totalFare = Math.round(baseFare + distanceFare);
+    const finalFare = Math.round(baseFare + distanceFare);
+
 
     return res.status(200).json({
       success: true,
@@ -575,13 +609,15 @@ export const calculateFare = async (req: Request, res: Response) => {
         vehicleTypeName: vType?.vehicleType || "Cab",
         seats,
         distanceKm: dist,
+        durationMins,
         tripType,
         baseFare,
         perKmRate,
         distanceFare,
         taxesIncluded: true,
-        totalFare,
-        estimatedTimeMinutes: Math.round(dist * 1.8)
+        finalFare,
+        totalFare: finalFare,
+        estimatedTimeMinutes: durationMins
       }
     });
   } catch (error: any) {
@@ -592,4 +628,51 @@ export const calculateFare = async (req: Request, res: Response) => {
       error: error.message
     });
   }
-};
+};
+
+export const updateVehiclePricing = async (req: Request, res: Response) => {
+  try {
+    const vehicleTypeId = req.params.id || req.body.vehicleTypeId;
+    const { baseFare, perKmRate } = req.body;
+
+    if (!vehicleTypeId) {
+      return res.status(400).json({
+        success: false,
+        message: "vehicleTypeId is required"
+      });
+    }
+
+    const vType = await VehicleType.findByPk(vehicleTypeId);
+    if (!vType) {
+      return res.status(404).json({
+        success: false,
+        message: "Vehicle type not found"
+      });
+    }
+
+    const updates: any = {};
+    if (baseFare !== undefined && !isNaN(Number(baseFare))) {
+      updates.baseFare = Math.max(Number(baseFare), 50);
+    }
+    if (perKmRate !== undefined && !isNaN(Number(perKmRate))) {
+      updates.perKmRate = Math.max(Number(perKmRate), 5);
+    }
+
+    await vType.update(updates);
+
+    return res.status(200).json({
+      success: true,
+      message: `Pricing updated for ${vType.vehicleType} successfully`,
+      data: vType
+    });
+  } catch (error: any) {
+    console.error("Update Vehicle Pricing Error:", error);
+    return res.status(500).json({
+      success: false,
+      message: "Failed to update pricing",
+      error: error.message
+    });
+  }
+};
+
+

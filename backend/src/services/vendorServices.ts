@@ -677,30 +677,34 @@ export const createDriver = async (req: any, res: Response) => {
 
 
 export const createVehicleType = async (req: any, res: Response) => {
-  const { vehicleType, seatCapacity, priorMinutes } = req.body; // ✅ NEW
+  const { vehicleType, seatCapacity, priorMinutes, baseFare, perKmRate } = req.body;
   try {
     const role = req.role;
     if (role === ROLES.USER) {
       return res.status(403).json({ message: 'Not Authorized' });
     }
-  const vehicleImg = req.files ? (req.files as Express.Multer.File[]).map(file => file.filename) : [];
+    const vehicleImg = req.files ? (req.files as Express.Multer.File[]).map(file => file.filename) : [];
 
     const existing = await VehicleType.findOne({ where: { vehicleType } });
     if (existing) return res.status(400).json({ message: 'Vehicle already registered' });
 
     const vehiType = await VehicleType.create({
       vehicleType,
-      seatCapacity,vehicleImg,
-      priorMinutes: Number(priorMinutes ?? 0), // ✅ NEW (safe default)
+      seatCapacity: Number(seatCapacity || 4),
+      vehicleImg,
+      priorMinutes: Number(priorMinutes ?? 30),
+      baseFare: baseFare !== undefined && !isNaN(Number(baseFare)) ? Number(baseFare) : 250,
+      perKmRate: perKmRate !== undefined && !isNaN(Number(perKmRate)) ? Number(perKmRate) : 14,
+      isDeleted: false
     });
 
     res.status(201).json({ message: 'Vehicle type created successfully', vehiType });
     return;
-
-  } catch (err) {
-    res.status(500).json({ error: err });
+  } catch (err: any) {
+    res.status(500).json({ error: err.message || err });
   }
 };
+
 
 // export const createVehicleType = async (req: any, res: Response) => {
 //   const { vehicleType, AdvanceBookingHours, seatCapacity } = req.body;

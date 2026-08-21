@@ -108,37 +108,36 @@ export const HomePage: React.FC = () => {
               img = "/images/step1.jpeg";
             }
 
-            let startRate = 250;
-            let kmRate = 14;
+            // Dynamic Base Fare & Per KM Rate from DB
+            const startRate = (t.baseFare !== undefined && t.baseFare !== null && Number(t.baseFare) > 0)
+              ? Number(t.baseFare)
+              : 250;
+            const kmRate = (t.perKmRate !== undefined && t.perKmRate !== null && Number(t.perKmRate) > 0)
+              ? Number(t.perKmRate)
+              : 14;
+
             let tag = "Most Popular";
             let cat = "City & Business";
             let luggage = "2 Bags";
 
             if (typeName.toLowerCase().includes("suv") || typeName.toLowerCase().includes("innova") || seats >= 6) {
-              startRate = 450;
-              kmRate = 19;
               tag = "Extra Space";
               cat = "Family & Outstation";
               luggage = "4 Bags";
             } else if (typeName.toLowerCase().includes("hatch") || typeName.toLowerCase().includes("mini")) {
-              startRate = 180;
-              kmRate = 12;
               tag = "Budget Friendly";
               cat = "Daily Commute";
               luggage = "1 Bag";
             } else if (typeName.toLowerCase().includes("luxury")) {
-              startRate = 800;
-              kmRate = 28;
               tag = "Premium VIP";
               cat = "Executive Luxury";
               luggage = "3 Bags";
             } else if (typeName.toLowerCase().includes("tempo") || seats >= 10) {
-              startRate = 1200;
-              kmRate = 24;
               tag = "Group Travel";
               cat = "Corporate & Group";
               luggage = "8 Bags";
             }
+
 
             return {
               id: t.vehicleTypeId,

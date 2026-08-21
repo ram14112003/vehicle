@@ -392,5 +392,35 @@ manager!: User;
   allowNull: true,
 })
 managerEmail!: string;
+
+  // 🔹 Permanent Trip & Fare Snapshot
+  @Column({
+    type: DataType.FLOAT,
+    allowNull: true,
+    defaultValue: 0,
+  })
+  distanceKm!: number;
+
+  @Column({
+    type: DataType.FLOAT,
+    allowNull: true,
+    defaultValue: 0,
+  })
+  baseFare!: number;
+
+  @Column({
+    type: DataType.FLOAT,
+    allowNull: true,
+    defaultValue: 0,
+  })
+  perKmRate!: number;
+
+  @Column({
+    type: DataType.FLOAT,
+    allowNull: true,
+    defaultValue: 0,
+  })
+  finalFare!: number;
 }
+
 

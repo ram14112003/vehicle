@@ -26,6 +26,7 @@ interface BookingItem {
   bookingCode: string;
   pickupPoint: string;
   dropPoint: string;
+  distanceKm?: number;
   bookingDate: string;
   bookingTime: string;
   confirmStatus: string;
@@ -74,23 +75,28 @@ export const MyBookings: React.FC = () => {
           else if (b.confirmStatus === "5" || b.bookingStatus === "Completed") status = "Completed";
 
           const vName = b.preferredType || b.vehicleType?.vehicleType || b.vehicle?.vehicleName || "Sedan Prime";
-          const invoiceAmount = b.invoice?.[0]?.invoiceAmount || b.invoice?.[0]?.totalAmount;
+          const distVal = (b.distanceKm && Number(b.distanceKm) > 0) ? Number(b.distanceKm) : 0;
+          const finalFareVal = (b.finalFare && Number(b.finalFare) > 0)
+            ? Number(b.finalFare)
+            : (b.invoice?.[0]?.invoiceAmount || b.invoice?.[0]?.totalAmount || 550);
 
           return {
             bookingId: b.bookingId,
             bookingCode: b.bookingCode || `BK${b.bookingId.slice(0, 8)}`,
             pickupPoint: b.pickupPoint || "Chennai",
             dropPoint: b.dropPoint || "Destination",
+            distanceKm: distVal,
             bookingDate: rawDate,
             bookingTime: b.bookingTime ? b.bookingTime.substring(0, 5) : "10:00 AM",
             confirmStatus: status,
             bookingStatus: b.bookingStatus || status,
             vehicleType: vName,
-            fare: invoiceAmount ? Number(invoiceAmount) : 550,
+            fare: Number(finalFareVal),
             driverName: b.driver?.driverName,
             driverPhone: b.driver?.phno,
             createdAt: b.createdAt || new Date().toISOString()
           };
+
         });
         setBookings(mapped);
       } else {
@@ -363,6 +369,12 @@ export const MyBookings: React.FC = () => {
                         <span className="w-2 h-2 rounded-full bg-rose-500 mt-1.5 flex-shrink-0" />
                         <span className="truncate">{b.dropPoint}</span>
                       </div>
+                      {b.distanceKm ? (
+                        <div className="pt-1.5 border-t border-slate-200/50 flex justify-between text-[11px] text-slate-500 font-medium">
+                          <span>Trip Distance:</span>
+                          <span className="font-bold text-slate-700">{b.distanceKm} km</span>
+                        </div>
+                      ) : null}
                     </div>
 
                     {/* Footer / Schedule & Actions */}
@@ -445,11 +457,18 @@ export const MyBookings: React.FC = () => {
                 <span className="text-[10px] uppercase font-bold text-slate-400 block">Drop Destination</span>
                 <p className="text-slate-900 mt-0.5">{selectedBooking.dropPoint}</p>
               </div>
+              {selectedBooking.distanceKm ? (
+                <div>
+                  <span className="text-[10px] uppercase font-bold text-slate-400 block">Trip Distance</span>
+                  <p className="text-slate-900 mt-0.5 font-bold">{selectedBooking.distanceKm} km</p>
+                </div>
+              ) : null}
               <div>
                 <span className="text-[10px] uppercase font-bold text-slate-400 block">Scheduled Date & Time</span>
                 <p className="text-slate-900 mt-0.5">{selectedBooking.bookingDate} at {selectedBooking.bookingTime}</p>
               </div>
             </div>
+
 
             {/* Driver Info if assigned in DB */}
             {selectedBooking.driverName && (

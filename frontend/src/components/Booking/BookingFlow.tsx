@@ -85,14 +85,29 @@ export const BookingFlow: React.FC = () => {
     }
   }, [user]);
 
-  // Route distance estimation
+  // Route distance calculation via backend single source of truth
   useEffect(() => {
-    if (pickup && drop) {
-      const hash = Math.abs(pickup.length * 7 + drop.length * 13) % 35 + 12;
-      const km = hash;
-      const mins = Math.round(km * 1.8);
-      setDistanceKm(km);
-      setEstimatedMins(mins);
+    let isCurrent = true;
+    if (pickup.trim() && drop.trim()) {
+      const timer = setTimeout(async () => {
+        try {
+          const res = await axiosInstance.post("/vehicleType/calculate-distance", {
+            pickup: pickup.trim(),
+            drop: drop.trim()
+          });
+          if (isCurrent && res.data?.success && res.data.data?.distanceKm) {
+            setDistanceKm(res.data.data.distanceKm);
+            setEstimatedMins(res.data.data.durationMins || Math.round(res.data.data.distanceKm * 1.8));
+          }
+        } catch (err) {
+          console.error("Distance API error:", err);
+        }
+      }, 350);
+
+      return () => {
+        isCurrent = false;
+        clearTimeout(timer);
+      };
     }
   }, [pickup, drop]);
 
@@ -125,21 +140,14 @@ export const BookingFlow: React.FC = () => {
             img = "/images/step1.jpeg";
           }
 
-          let baseRate = 250;
-          let kmRate = 14;
-          if (typeName.toLowerCase().includes("suv") || typeName.toLowerCase().includes("innova") || seats >= 6) {
-            baseRate = 450;
-            kmRate = 19;
-          } else if (typeName.toLowerCase().includes("hatch") || typeName.toLowerCase().includes("mini")) {
-            baseRate = 180;
-            kmRate = 12;
-          } else if (typeName.toLowerCase().includes("luxury") || typeName.toLowerCase().includes("camry")) {
-            baseRate = 800;
-            kmRate = 28;
-          } else if (typeName.toLowerCase().includes("tempo") || seats >= 10) {
-            baseRate = 1200;
-            kmRate = 24;
-          }
+          // Dynamic Base Fare & Per KM Rate from DB (configured by Admin)
+          const baseRate = (t.baseFare !== undefined && t.baseFare !== null && Number(t.baseFare) > 0)
+            ? Number(t.baseFare)
+            : 250;
+          const kmRate = (t.perKmRate !== undefined && t.perKmRate !== null && Number(t.perKmRate) > 0)
+            ? Number(t.perKmRate)
+            : 14;
+
 
           const multiplier = tripType === "roundtrip" ? 1.8 : 1.0;
           const fare = Math.round(baseRate + (distanceKm * kmRate * multiplier));
@@ -250,6 +258,7 @@ export const BookingFlow: React.FC = () => {
         bookingTime: `${time}:00`,
         pickupPoint: pickup.trim(),
         dropPoint: drop.trim(),
+        distanceKm: distanceKm,
         pickupCity: "Chennai",
         travellersCount: Number(passengers) || 1,
         femaleCount: 0,
@@ -278,10 +287,11 @@ export const BookingFlow: React.FC = () => {
           bookingCode: bk.bookingCode || `BK${bk.bookingId?.slice(0, 8)}`,
           pickup: bk.pickupPoint || pickup,
           drop: bk.dropPoint || drop,
+          distanceKm: bk.distanceKm || distanceKm,
           date: date,
           time: time,
           vehicle: selectedVehicle.name,
-          fare: selectedVehicle.estimatedFare,
+          fare: bk.finalFare || selectedVehicle.estimatedFare,
           riderName: riderName.trim(),
           riderPhone: riderPhone.trim(),
           status: bk.confirmStatus === "1" ? "Confirmed" : (bk.confirmStatus || "Pending")
@@ -303,6 +313,7 @@ export const BookingFlow: React.FC = () => {
       setSubmittingBooking(false);
     }
   };
+
 
   return (
     <div className="max-w-5xl mx-auto px-4 sm:px-6 py-8">
@@ -823,13 +834,18 @@ export const BookingFlow: React.FC = () => {
                 <span className="text-slate-900 font-bold">{confirmedBooking.date} at {confirmedBooking.time}</span>
               </div>
               <div className="flex justify-between py-1 border-b border-slate-200/60">
+                <span className="text-slate-500">Trip Distance:</span>
+                <span className="text-slate-900 font-bold">{confirmedBooking.distanceKm} km</span>
+              </div>
+              <div className="flex justify-between py-1 border-b border-slate-200/60">
                 <span className="text-slate-500">Passenger:</span>
                 <span className="text-slate-900 font-bold">{confirmedBooking.riderName} ({confirmedBooking.riderPhone})</span>
               </div>
               <div className="flex justify-between py-1 pt-2">
-                <span className="text-slate-900 font-bold text-sm">Estimated Total:</span>
+                <span className="text-slate-900 font-bold text-sm">Final Fare:</span>
                 <span className="text-emerald-700 font-black text-base">₹{confirmedBooking.fare}</span>
               </div>
+
             </div>
 
             {/* Action Buttons */}

@@ -21,6 +21,8 @@ interface VehicleType {
   vehicleType: string;
   priorMinutes: number; 
    seatCapacity: number; 
+   baseFare?: number;
+  perKmRate?: number;
    vehicleImg?: string[];
   trashed?: boolean;
 }
@@ -208,10 +210,20 @@ const handleImageChange = (e: React.ChangeEvent<HTMLInputElement>) => {
   // Table columns
   const columns: Column<VehicleType>[] = [
     { header: "Vehicle Type", accessor: "vehicleType" },
-    { header: "Advance Booking Hours", accessor:  "priorMinutes"  },
-      { header: "Seat Capacity", accessor: "seatCapacity" },
-
+    { header: "Seat Capacity", accessor: "seatCapacity" },
+    {
+      header: "Base Fare (₹)",
+      accessor: "baseFare",
+      render: (row) => <span className="font-bold text-emerald-700">₹{row.baseFare || 250}</span>
+    },
+    {
+      header: "Rate (₹/km)",
+      accessor: "perKmRate",
+      render: (row) => <span className="font-bold text-slate-800">₹{row.perKmRate || 14}/km</span>
+    },
+    { header: "Prior Minutes", accessor: "priorMinutes" },
   ];
+
 
   return (
     <PageLayout>
@@ -232,15 +244,25 @@ const handleImageChange = (e: React.ChangeEvent<HTMLInputElement>) => {
             />
           </div>
           <TrashToggleButton showTrashed={showTrashed} onToggle={() => setShowTrashed((t) => !t)} />
-          <CommonButton
-            variant="success"
-            className="w-full sm:w-auto"
-            onClick={() => navigate("/vehicle/vehicletype/add")}
-          >
-            <FontAwesomeIcon icon={faPlus} />
-            <span>Add Vehicle Type</span>
-          </CommonButton>
+          <div className="flex gap-2 w-full sm:w-auto">
+            <CommonButton
+              variant="primary"
+              className="w-full sm:w-auto bg-amber-500 hover:bg-amber-600 text-slate-950 font-bold"
+              onClick={() => navigate("/pricing")}
+            >
+              <span>Manage Pricing</span>
+            </CommonButton>
+            <CommonButton
+              variant="success"
+              className="w-full sm:w-auto"
+              onClick={() => navigate("/vehicle/vehicletype/add")}
+            >
+              <FontAwesomeIcon icon={faPlus} />
+              <span>Add Vehicle Type</span>
+            </CommonButton>
+          </div>
         </div>
+
 
         {/* Data Table */}
         <DataTable

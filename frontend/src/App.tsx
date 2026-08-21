@@ -39,9 +39,11 @@ import AddVehicleModel from './SuperAdmin/pages/Vehicle/VehicleModel/AddVehicleM
 import ListVehicleModel from './SuperAdmin/pages/Vehicle/VehicleModel/ListVehicleModel';
 import AddVehicleMaster from './SuperAdmin/pages/Vehicle/VehicleMaster/AddVehicleMaster';
 import ListVehicleMaster from './SuperAdmin/pages/Vehicle/VehicleMaster/ListVehicleMaster';
+import PricingSettings from './SuperAdmin/pages/Vehicle/PricingSettings';
 
 // Orders
 import ConfirmPendingList from './SuperAdmin/pages/Orders/ConfirmPendingList';
+
 import ViewConfirmPendingOrder from './SuperAdmin/pages/Orders/view/viewConfrimPendingList';
 import EditConfirmPendingList from './SuperAdmin/pages/Orders/Edit/editConfirmPendingList';
 import ClosePendingList from './SuperAdmin/pages/Orders/ClosePendingList';
@@ -187,6 +189,9 @@ const Layout = () => {
           <Route path="/paymentmode/add" element={<AddPaymentMode />} />
           <Route path="/paymentmode/list" element={<ListPaymentMode />} />
           {/* Vehicle Routes */}
+          <Route path="/vehicles" element={<ListVehicleType />} />
+          <Route path="/pricing" element={<PricingSettings />} />
+          <Route path="/vehicle/pricing" element={<PricingSettings />} />
           <Route path="/vehicle/vehicletype/add" element={<AddVehicleType />} />
           <Route path="/vehicle/vehicletype/list" element={<ListVehicleType />} />
           <Route path="/vehicle/vehiclemodel/add" element={<AddVehicleModel />} />
@@ -194,7 +199,9 @@ const Layout = () => {
           <Route path="/vehicle/vehiclemaster/add" element={<AddVehicleMaster />} />
           <Route path="/vehicle/vehiclemaster/list" element={<ListVehicleMaster />} />
           {/* Orders Routes */}
+          <Route path="/orders" element={<ConfirmPendingList />} />
           <Route path="/orders/confirmpending" element={<ConfirmPendingList />} />
+
           <Route path="/orders/view/confirm-pending-order/:bookingId" element={<ViewConfirmPendingOrder />} />
           <Route path="/orders/confirmpending/:bookingId" element={<EditConfirmPendingList />} />
           <Route path="/orders/closepending" element={<ClosePendingList />} />
@@ -212,8 +219,10 @@ const Layout = () => {
           <Route path="/orders/cancelled" element={<ListCancelOrder />} />
           <Route path="/orders/view/cancelled-order/:bookingId" element={<ViewCancelOrder />} />
           {/* Users Routes */}
+          <Route path="/users" element={<UserList />} />
           <Route path="/users/adduser" element={<AddUser />} />
           <Route path="/users/list" element={<UserList />} />
+
 
           <Route path="/users/userdetails/:userId" element={<UserDetails />} />
            {/* Booking  */}

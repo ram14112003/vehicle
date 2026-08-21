@@ -17,16 +17,18 @@ import { FontAwesomeIcon } from "@fortawesome/react-fontawesome";
 import PageLayout from "../../../../components/PageLayout";
 import { showToast, AlertContainer } from "../../../../components/AlertBox";
 
-// Interfaces
 interface Order {
   bookingId: string;
   bookingCode: string;
   createdAt: string;
   bookingDate: string;
+  bookingTime?: string;
   pickupPoint: string;
   pickupCity: string;
   pickupArea: string;
   dropPoint: string;
+  distanceKm?: number;
+  finalFare?: number;
   userId: string;
   vehicleTypeId: string;
   confirmStatus: string;
@@ -35,6 +37,7 @@ interface Order {
     status: string;
   };
 }
+
 
 interface User {
   username: string;
@@ -300,7 +303,14 @@ const ViewConfirmPendingOrder: React.FC = () => {
           <p>
             <strong>Vehicle Type:</strong> {vehicleType || "-"}
           </p>
+          <p>
+            <strong>Trip Distance:</strong> {order?.distanceKm ? `${order.distanceKm} km` : "-"}
+          </p>
+          <p>
+            <strong>Payable Fare:</strong> <span className="font-bold text-emerald-700">₹{order?.finalFare || 550}</span>
+          </p>
         </div>
+
 
         <div className="p-4 border rounded shadow-sm bg-white mb-6">
           <h3 className="text-lg font-semibold mb-3 flex items-center gap-2">

@@ -24,7 +24,9 @@ import config from '../config/config';
 import { normalizeManagerEmails } from '../utils/email';
 import { sendSmsNotifications } from '../utils/smsNotifications';
 import { Security } from '../utils/Security';
+import { calculateRouteDistance } from '../utils/distanceCalculator';
 import crypto from "crypto";
+
 
 
 
@@ -147,6 +149,45 @@ export const createBookingForWeb = async (req: any, res: Response) => {
     const autoApproveStatus = STATUS.PENDING;    
     const company = user?.companyId ? await Company.findByPk(user.companyId) : null;
 
+    // Authoritative distance calculation
+    let calculatedDist = Number(req.body.distanceKm);
+    if (!calculatedDist || isNaN(calculatedDist) || calculatedDist <= 0) {
+      const route = await calculateRouteDistance(pickupPoint, dropPoint);
+      calculatedDist = route.distanceKm;
+    }
+    calculatedDist = Math.max(calculatedDist, 1);
+
+    // Authoritative VehicleType & rates calculation
+    let vType = null;
+    if (vehicleTypeId) {
+      vType = await VehicleType.findByPk(vehicleTypeId);
+    }
+
+    const typeName = vType?.vehicleType?.toLowerCase() || (preferredType || "").toLowerCase();
+    const seats = vType?.seatCapacity || (typeName.includes("suv") ? 6 : 4);
+
+    let baseRate = vType?.baseFare || 250;
+    let kmRate = vType?.perKmRate || 14;
+
+    if (!vType?.baseFare || !vType?.perKmRate) {
+      if (typeName.includes("suv") || typeName.includes("innova") || seats >= 6) {
+        baseRate = 450;
+        kmRate = 19;
+      } else if (typeName.includes("hatch") || typeName.includes("mini")) {
+        baseRate = 180;
+        kmRate = 12;
+      } else if (typeName.includes("luxury") || typeName.includes("camry") || typeName.includes("mercedes")) {
+        baseRate = 800;
+        kmRate = 28;
+      } else if (typeName.includes("tempo") || seats >= 10) {
+        baseRate = 1200;
+        kmRate = 24;
+      }
+    }
+
+    const tripMultiplier = roundTrip === "Yes" || roundTrip === "roundtrip" ? 1.8 : 1.0;
+    const finalFareAmount = Math.round(baseRate + (calculatedDist * kmRate * tripMultiplier));
+
     // Derive booking time if not given
     let finalBookingTime = bookingTime;
     if (!bookingTime && bookingDate) {
@@ -154,7 +195,7 @@ export const createBookingForWeb = async (req: any, res: Response) => {
       finalBookingTime = timePart.substring(0, 8);
     }
 
-    // ✅ Create booking properly
+    // ✅ Create booking properly with permanent fare snapshot
     const booking = await Booking.create({
       bookingDate,
       bookingTime: finalBookingTime,
@@ -163,6 +204,10 @@ export const createBookingForWeb = async (req: any, res: Response) => {
       pickupCity: pickupCity || "Chennai",
       dropPoint,
       userId: finalUserId,
+      distanceKm: calculatedDist,
+      baseFare: baseRate,
+      perKmRate: kmRate,
+      finalFare: finalFareAmount,
 
       travellersCount,
       femaleCount,
@@ -173,8 +218,8 @@ export const createBookingForWeb = async (req: any, res: Response) => {
       bookingStatus,
       vehicleId,
       driverId,
-      vehicleTypeId,
-      preferredType,
+      vehicleTypeId: vType?.vehicleTypeId || vehicleTypeId,
+      preferredType: vType?.vehicleType || preferredType || "Cab",
       roundTrip,
       pickupAirport,
       pickupStation,
@@ -187,22 +232,20 @@ export const createBookingForWeb = async (req: any, res: Response) => {
       dropLongitude,
       bookingCreatedBy,
 
-
-
-        behalfOfName,
-        behalfOfPhone,
+      behalfOfName,
+      behalfOfPhone,
       autoApproveStatus,
       pickupArea,
       predefinedArea,
       approximatetds2,
       approximatetds1,
-        // ✅ ADD THESE
-  costCenter,
-  managerUserId,
-  driverTripStatus,
-  managerEmail,
+      costCenter,
+      managerUserId,
+      driverTripStatus,
+      managerEmail,
       createdBy,
     });
+
 
        // ================= DANFOSS MANAGER ALERT =================
    // if (company?.companyName?.toLowerCase().includes("danfoss")) {
@@ -484,8 +527,32 @@ export const createBookingForWebOnCall = async (req: any, res: Response) => {
       finalBookingTime = timePart.substring(0, 8);
     }
 
-    
-    // ✅ Create booking properly
+    // ✅ Dynamic Distance & Fare calculation from DB VehicleType
+    let vType = null;
+    if (vehicleTypeId) {
+      vType = await VehicleType.findByPk(vehicleTypeId);
+    } else if (preferredType) {
+      vType = await VehicleType.findOne({ where: { vehicleType: preferredType, isDeleted: false } });
+    }
+
+    let calculatedDistance = Number(req.body.distanceKm) || 0;
+    if (calculatedDistance <= 0 && pickupPoint && dropPoint) {
+      const route = await calculateRouteDistance(pickupPoint, dropPoint);
+      calculatedDistance = route.distanceKm;
+    }
+    calculatedDistance = Math.max(calculatedDistance, 1);
+
+    const dbBaseFare = (vType?.baseFare !== undefined && vType?.baseFare !== null && Number(vType.baseFare) > 0)
+      ? Number(vType.baseFare)
+      : 250;
+    const dbPerKmRate = (vType?.perKmRate !== undefined && vType?.perKmRate !== null && Number(vType.perKmRate) > 0)
+      ? Number(vType.perKmRate)
+      : 14;
+
+    const tripMultiplier = (roundTrip === "Yes" || roundTrip === "roundtrip") ? 1.8 : 1.0;
+    const computedFare = Math.round(dbBaseFare + (calculatedDistance * dbPerKmRate * tripMultiplier));
+
+    // ✅ Create booking properly with permanent fare snapshot
     const booking = await Booking.create({
       bookingDate,
       bookingTime: finalBookingTime,
@@ -493,6 +560,10 @@ export const createBookingForWebOnCall = async (req: any, res: Response) => {
       pickupPoint,
       pickupCity,
       dropPoint,
+      distanceKm: calculatedDistance,
+      baseFare: dbBaseFare,
+      perKmRate: dbPerKmRate,
+      finalFare: computedFare,
       travellersCount,
       femaleCount,
       maleCount,
@@ -502,8 +573,8 @@ export const createBookingForWebOnCall = async (req: any, res: Response) => {
       bookingStatus,
       vehicleId,
       driverId,
-      vehicleTypeId,
-      preferredType,
+      vehicleTypeId: vType?.vehicleTypeId || vehicleTypeId,
+      preferredType: vType?.vehicleType || preferredType,
       roundTrip,
       pickupAirport,
       pickupStation,
@@ -516,20 +587,19 @@ export const createBookingForWebOnCall = async (req: any, res: Response) => {
       dropLongitude,
       userId,
       bookingCreatedBy,
-        behalfOfName,
-        behalfOfPhone,
+      behalfOfName,
+      behalfOfPhone,
       autoApproveStatus,
       pickupArea,
       predefinedArea,
       approximatetds2,
       approximatetds1,
-        // ✅ ADD THESE
-  costCenter,
-  managerUserId,
-  managerEmail,
+      costCenter,
+      managerUserId,
+      managerEmail,
       createdBy,
-        companyId,
-        selfName
+      companyId,
+      selfName
     });
 
        // ================= DANFOSS MANAGER ALERT =================
@@ -1088,48 +1158,26 @@ export const getAllPendingBooking = async (req: Request, res: Response) => {
         "createdAt"
       ],
       include: [
-         {
+        {
           model: VehicleType,
-            as: "vehicleType",
+          as: "vehicleType",
           required: false,
-          include: [
-            {
-              model: Vehicle,
-                    as: "vehicle",      
-              required: false,
-            }
-          ]
         },
         {
           model: Vehicle,
-                as: "vehicle",      
+          as: "vehicle",
           required: false,
-          include: [
-            {
-              model: VehicleType,
-              required: false,
-              attributes: [
-                "vehicleTypeId",
-                "vehicleType",
-                "AdvanceBookingHours",
-                "seatCapacity",
-                "vehicleImg",
-                "isDeleted",
-                "createdAt"
-              ]
-            }
-          ]
         },
         {
           model: User,
           as: "user",
-          required: true,
-           attributes: ["userId", "username", "mobile"], 
+          required: false,
+          attributes: ["userId", "username", "mobile"], 
           include: [
             {
               model: Company,
               as: "company",
-              required: true,
+              required: false,
               attributes: ["companyId", "managerApproval", "companyName"]
             }
           ]
@@ -1138,26 +1186,26 @@ export const getAllPendingBooking = async (req: Request, res: Response) => {
       order: [["createdAt", "DESC"]]
     });
 
-    // Filtering based on company approval
-// Filtering based on company approval 
-// Filtering based on company approval 
-    // Filtering based on company approval 
-const filteredBookings = bookings.filter((booking: any) => {
-  const company = booking?.user?.company;
-  if (!company) return false;
 
-  const confirmStatus = Number(booking.confirmStatus);
-  const bookingStatus = Number(booking.bookingStatus);
+    // Filtering based on company approval and retail customers
+    const filteredBookings = bookings.filter((booking: any) => {
+      const company = booking?.user?.company;
+      const cStatus = String(booking.confirmStatus);
+      const bStatus = String(booking.bookingStatus);
 
-  // Company requires manager approval
-  if (company.managerApproval) {
-    // Only after manager approval (0,1)
-    return confirmStatus === 0 && bookingStatus === 1;
-  } else {
-    // No manager approval required → vendor pending (0,0)
-    return confirmStatus === 0 && bookingStatus === 0;
-  }
-});
+      if (!company) {
+        // Retail / Web booking without corporate manager approval -> directly pending
+        return cStatus === "0" || cStatus === "Pending" || !booking.confirmStatus;
+      }
+
+      // Corporate booking
+      if (company.managerApproval) {
+        return (cStatus === "0" || cStatus === "Pending") && (bStatus === "1" || bStatus === "Confirmed");
+      } else {
+        return cStatus === "0" || cStatus === "Pending";
+      }
+    });
+
 
 
     // Format response
@@ -1415,12 +1463,12 @@ export const confirmPendingOrderCountWeb = async (req: any, res: Response) => {
         {
           model: User,
           as: "user",
-          required: true,
+          required: false,
           include: [
             {
               model: Company,
               as: "company",
-              required: true,
+              required: false,
               attributes: ["companyId", "managerApproval"]
             }
           ]
@@ -1432,19 +1480,21 @@ export const confirmPendingOrderCountWeb = async (req: any, res: Response) => {
     // 🔹 Apply same filtering logic as getAllPendingBooking
     const filteredBookings = bookings.filter((booking: any) => {
       const company = booking?.user?.company;
-      if (!company) return false;
+      const cStatus = String(booking.confirmStatus);
+      const bStatus = String(booking.bookingStatus);
 
-      const confirmStatus = Number(booking.confirmStatus);
-      const bookingStatus = Number(booking.bookingStatus);
+      if (!company) {
+        // Retail web booking without corporate manager approval -> directly pending
+        return cStatus === "0" || cStatus === "Pending" || !booking.confirmStatus;
+      }
 
       if (company.managerApproval) {
-        // After manager approval → waiting for vendor approval
-        return confirmStatus === 0 && bookingStatus === 1;
+        return (cStatus === "0" || cStatus === "Pending") && (bStatus === "1" || bStatus === "Confirmed");
       } else {
-        // No manager approval → directly vendor pending
-        return confirmStatus === 0 && bookingStatus === 0;
+        return cStatus === "0" || cStatus === "Pending";
       }
     });
+
 
     const count = filteredBookings.length;
 

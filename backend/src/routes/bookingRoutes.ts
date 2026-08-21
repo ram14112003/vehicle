@@ -3,7 +3,7 @@ import { getAllOrders, editBooking, cancelBooking, declineBooking, getOrderById,
   getOrderByEmployeeId,getBookingDetails, getOrderPaymentListById,getOverallInvoiceReport,companyBookingReport,
   getMonthlyBookings,getAllOrdersByUser,getCancelledOrdersByUser,getClosedOrdersByUser,getConfirmedOrdersByUser,
   getOrdersByStatus,getPaymentCompletedOrdersByUser,getPendingOrdersByUser,getPendingInvoicesByUser,getPaymentPendingOrdersByUser,downloadUserInvoicePdf,
-  createPartner,editCloseBooking } from '../services/bookingServices';
+  createPartner,editCloseBooking, getDashboardStats, updateBookingStatus, getAllAdminBookings } from '../services/bookingServices';
 
 import { authMiddleware } from '../middleware/authMiddleware';
 import {
@@ -16,9 +16,15 @@ import {
 const router = express.Router();
 
 router.post("/partners",  createPartner);
+router.get("/admin/dashboard-stats", getDashboardStats);
+router.get("/admin/all-bookings", getAllAdminBookings);
+router.put("/update-status", updateBookingStatus);
+router.put("/status/:bookingId", updateBookingStatus);
+
 
 router.get("/getAllOrders", authMiddleware,getAllOrders);
 router.post("/getOrdersById", authMiddleware,getOrderById);
+
 router.post("/getOrderPaymentListById", authMiddleware,getOrderPaymentListById);
 router.post("/getOrderByEmployeeId", authMiddleware,getOrderByEmployeeId);
 

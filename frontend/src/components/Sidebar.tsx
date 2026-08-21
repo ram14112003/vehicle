@@ -1,339 +1,134 @@
-import React, { useState } from 'react';
+import React from 'react';
 import { FontAwesomeIcon } from '@fortawesome/react-fontawesome';
 import {
-  faTachometerAlt, faCogs, faMoneyCheckAlt, faCar, faClipboardList,
-  faUsers, faUserTie, faUserSecret, faFileInvoice, faChartBar, faDatabase,
-  faChevronDown, faChevronRight, faPlus, faList, faEnvelope, faCity,
-  faBuilding, faBoxOpen, faMapMarkerAlt, faReceipt, faBell, faCheckCircle,
-  faTimesCircle, faUser, faUserPlus, faUserFriends, faTruck, faCarSide,
-  faCarAlt, faMoneyBillWave, faCashRegister, faClipboardCheck, faFileAlt,
-  faCrown, faUserPen,
-  faCalendarAlt,
-  faCalendarCheck,
-  faFileLines
+  faTachometerAlt,
+  faClipboardList,
+  faCar,
+  faUsers,
+  faMoneyBillWave,
+  faSignOutAlt,
+  faShieldAlt
 } from '@fortawesome/free-solid-svg-icons';
-import { NavLink } from 'react-router-dom'; // ✅ Changed from Link to NavLink
+import { NavLink, useNavigate } from 'react-router-dom';
 
-// Interface for menu items
-interface MenuItem {
+interface NavItem {
   label: string;
-  path?: string;
+  path: string;
   icon: any;
-  children?: MenuItem[];
+  badge?: string;
 }
 
-// Menu items
-const menu: MenuItem[] = [
+const NAV_ITEMS: NavItem[] = [
   {
     label: 'Dashboard',
-    icon: faTachometerAlt,
     path: '/dashboard',
+    icon: faTachometerAlt,
   },
   {
-    label: 'Master',
-    icon: faCrown,
-    children: [
-      {
-        label: 'Tax',
-        icon: faList,
-        children: [
-          { label: 'Add Tax', path: '/master/tax/add', icon: faPlus },
-          { label: 'List Tax', path: '/master/tax/list', icon: faList },
-        ],
-      },
-      {
-        label: 'Pickup Area',
-        icon: faMapMarkerAlt,
-        children: [
-          { label: 'Add Pickup Area', path: '/master/pickuparea/add', icon: faPlus },
-          { label: 'Pickup Area Info', path: '/master/pickuparea/info', icon: faList },
-        ],
-      },
-      {
-        label: 'Pickup City',
-        icon: faCity,
-        children: [
-          { label: 'Add Pickup City', path: '/master/pickupcity/add', icon: faPlus },
-          { label: 'List Pickup City', path: '/master/pickupcity/list', icon: faList },
-        ],
-      },
-      {
-        label: 'Company',
-        icon: faBuilding,
-        children: [
-          { label: 'Add Company', path: '/master/company/add', icon: faPlus },
-          { label: 'List Company', path: '/master/company/list', icon: faList },
-        ],
-      },
-      {
-        label: 'Package',
-        icon: faBoxOpen,
-        children: [
-          { label: 'Add Package', path: '/master/package/add', icon: faPlus },
-          { label: 'List Package', path: '/master/package/list', icon: faList },
-        ],
-      },
-    ],
-  },
-  {
-    label: 'Configuration',
-    icon: faCogs,
-    children: [
-      { label: 'Configuration', path: '/configuration/master', icon: faCogs },
-      { label: 'Email Configuration', path: '/configuration/email', icon: faEnvelope }
-    ],
-  },
-  {
-    label: 'Payment Mode',
-    icon: faMoneyCheckAlt,
-    children: [
-      { label: 'Add Payment Mode', path: '/paymentmode/add', icon: faPlus },
-      { label: 'List Payment Mode', path: '/paymentmode/list', icon: faList },
-    ],
-  },
-  {
-    label: 'Vehicle',
-    icon: faCar,
-    children: [
-      {
-        label: 'Vehicle Type',
-        icon: faList,
-        children: [
-          { label: 'Add Vehicle Type', path: '/vehicle/vehicletype/add', icon: faPlus },
-          { label: 'List Vehicle Type', path: '/vehicle/vehicletype/list', icon: faCarSide },
-        ],
-      },
-      {
-        label: 'Vehicle Model',
-        icon: faList,
-        children: [
-          { label: 'Add Vehicle Model', path: '/vehicle/vehiclemodel/add', icon: faPlus },
-          { label: 'List Vehicle Model', path: '/vehicle/vehiclemodel/list', icon: faCarAlt },
-        ],
-      },
-      {
-        label: 'Vehicle Master',
-        icon: faList,
-        children: [
-          { label: 'Add Vehicle Master', path: '/vehicle/vehiclemaster/add', icon: faPlus },
-          { label: 'List Vehicle Master', path: '/vehicle/vehiclemaster/list', icon: faTruck },
-        ],
-      },
-    ],
-  },
-  {
-    label: 'Orders',
+    label: 'Bookings',
+    path: '/orders',
     icon: faClipboardList,
-    children: [
-      { label: 'Confirm Pending List', path: '/orders/confirmpending', icon: faClipboardCheck },
-      { label: 'Close Pending List', path: '/orders/closepending', icon: faTimesCircle },
-      { label: 'Payment Pending List', path: '/orders/paymentpending', icon: faMoneyBillWave },
-      { label: 'Completed List', path: '/orders/completed', icon: faCheckCircle },
-      { label: 'Payment List', path: '/orders/paymentlist', icon: faCashRegister },
-      { label: 'List Cancel Order', path: '/orders/cancelled', icon: faTimesCircle },
-    ],
+  },
+  {
+    label: 'Vehicles',
+    path: '/vehicle/vehicletype/list',
+    icon: faCar,
   },
   {
     label: 'Users',
+    path: '/users/list',
     icon: faUsers,
-    children: [
-      { label: 'Add User', path: '/users/adduser', icon: faUserPen },
-      { label: 'User List', path: '/users/list', icon: faUserFriends }
-    ],
-  },
-   {
-    label: 'Monthly Bookings',
-    icon: faCalendarAlt,
-    children: [
-      { label: 'Monthly Invoice', path: '/booking/monthlybooking', icon: faCalendarCheck },
-      { label: 'Monthly Report', path: '/booking/monthlyreport', icon: faFileLines },
-      { label: 'OnCall Invoice', path: '/booking/oncallinvoice', icon: faFileLines },
-    ],
   },
   {
-    label: 'Owners',
-    icon: faUserTie,
-    children: [
-      { label: 'Add Owner', path: '/vendors/add', icon: faUserPlus },
-      { label: 'List Owner', path: '/vendors/list', icon: faUser },
-    ],
+    label: 'Fleet Pricing',
+    path: '/pricing',
+    icon: faMoneyBillWave,
   },
-  {
-    label: 'Drivers',
-    icon: faUserSecret,
-    children: [
-      { label: 'Add Driver', path: '/drivers/add', icon: faUserPlus },
-      { label: 'List Driver', path: '/drivers/list', icon: faUser },
-      { label: 'List Assigned Task', path: '/drivers/assignedlist', icon: faTruck },
-        { label: 'Trip Details', path: '/drivers/tripdetails', icon: faTruck },
-    ],
-  },
-  
-  {
-    label: 'Invoice',
-    icon: faFileInvoice,
-    children: [
-      { label: 'Pending Invoices', path: '/invoice/pending', icon: faReceipt },
-      { label: 'Invoice Reminder', path: '/invoice/reminder', icon: faBell },
-      { label: 'Payment For Invoices', path: '/invoice/paymentfor', icon: faMoneyBillWave },
-      { label: 'Paid Invoice List', path: '/invoice/paid', icon: faCheckCircle },
-      { label: 'All Invoice List', path: '/invoice/all', icon: faList },
-      { label: 'Invoice Pay Holder', path: '/invoice/payholder', icon: faFileAlt },
-    ],
-  },
-  {
-    label: 'Reports',
-    icon: faChartBar,
-    children: [
-      { label: 'Order Summary', path: '/reports/order-summary', icon: faClipboardCheck },
-      { label: 'Company Order Summary', path: '/reports/company-order-summary', icon: faBuilding },
-      { label: 'Overall Invoice Report', path: '/reports/overall-invoice-report', icon: faFileInvoice },
-    ],
-  },
-  { label: 'Uploads', icon: faDatabase, path: '/uploads' },
-  { label: 'Cache', icon: faDatabase, path: '/cache' },
 ];
 
 const Sidebar: React.FC = () => {
-  const [openDropdown, setOpenDropdown] = useState<string[]>([]);
-  const [collapsed, setCollapsed] = useState(false);
+  const navigate = useNavigate();
+  const adminName = localStorage.getItem('username') || 'Admin';
 
-  const toggleDropdown = (label: string) => {
-    setOpenDropdown((prev: any) =>
-      prev.includes(label)
-        ? prev.filter((item: any) => item !== label)
-        : [...prev, label]
-    );
+  const handleLogout = () => {
+    localStorage.clear();
+    navigate('/adminlogin');
   };
 
   return (
-    <aside
-      className={`fixed left-0 top-0 h-screen flex flex-col shadow-lg transition-all duration-300 ease-in-out
-        ${collapsed ? 'w-20' : 'w-70'}
-        z-40 bg-[#275981] text-[#ebf4f6]
-      `}
-      style={{ backdropFilter: 'blur(10px)' }}
-    >
-  {/* Logo/Header */}
-<div className="sticky top-0 z-10">
-  <div className="flex items-center gap-3 px-4 pt-4 pb-2">
-    {/* Logo */}
-    <img 
-      src="/images/favicon1.jpeg" 
-      alt="Driver logo" 
-      className="h-11 w-12 rounded-full" 
-    />
+    <aside className="fixed left-0 top-0 h-screen w-64 flex flex-col bg-slate-900 text-slate-200 z-40 border-r border-slate-800 shadow-2xl">
+      {/* Brand Header */}
+      <div className="p-5 border-b border-slate-800/80 flex items-center gap-3">
+        <div className="w-10 h-10 rounded-2xl bg-gradient-to-tr from-amber-500 to-yellow-400 flex items-center justify-center text-slate-950 shadow-lg shadow-amber-500/20 flex-shrink-0">
+          <FontAwesomeIcon icon={faCar} className="text-lg" />
+        </div>
+        <div>
+          <h2 className="text-base font-black text-white tracking-wide">Grace Cabs</h2>
+          <div className="flex items-center gap-1.5 mt-0.5">
+            <span className="w-2 h-2 rounded-full bg-emerald-400 animate-pulse"></span>
+            <span className="text-[11px] font-bold text-slate-400 uppercase tracking-wider">Admin Portal</span>
+          </div>
+        </div>
+      </div>
 
-    {/* Text */}
-    <span className="text-xl font-bold text-white">
-      Grace Cabs
-    </span>
-  </div>
-</div>
+      {/* Navigation List */}
+      <nav className="flex-1 px-3 py-5 space-y-1.5 overflow-y-auto">
+        <div className="px-3 pb-2 text-[10px] font-extrabold uppercase tracking-widest text-slate-400">
+          Main Management
+        </div>
 
-
-      {/* Menu */}
-      <nav className="flex-1 overflow-y-hidden hover:overflow-auto scrollbar-thin scrollbar-thumb-white/20 scrollbar-track-transparent py-4 text-[#e8e9f2]">
-        <ul className="space-y-1">
-          {menu.map((item) => (
-            <li key={item.label}>
-              {item.children ? (
-                <>
-                  {/* Parent Menu */}
-                  <button
-                    className={`flex items-center w-full px-6 py-3 transition-colors duration-200 ${collapsed ? 'justify-center' : ''
-                      } hover:bg-white hover:text-black`}
-                    onClick={() => toggleDropdown(item.label)}
-                  >
-                    <FontAwesomeIcon icon={item.icon} className={`text-lg ${collapsed ? '' : 'mr-3'}`} />
-                    {!collapsed && <span className="flex-1 text-left">{item.label}</span>}
-                    {!collapsed && (
-                      <FontAwesomeIcon
-                        icon={openDropdown.includes(item.label) ? faChevronDown : faChevronRight}
-                        className="ml-auto"
-                      />
-                    )}
-                  </button>
-
-                  {/* Submenus */}
-                  {openDropdown.includes(item.label) && !collapsed && (
-                    <ul className="ml-8 mt-1 space-y-1">
-                      {item.children.map((subItem) => (
-                        <li key={subItem.label}>
-                          {subItem.children ? (
-                            <>
-                              {/* Submenu with children */}
-                              <button
-                                className="flex items-center w-full px-4 py-2 hover:bg-white hover:text-black transition-colors duration-200"
-                                onClick={() => toggleDropdown(`${item.label}-${subItem.label}`)}
-                              >
-                                <FontAwesomeIcon icon={subItem.icon} className="mr-2 text-base" />
-                                <span className="flex-1 text-left">{subItem.label}</span>
-                                <FontAwesomeIcon
-                                  icon={openDropdown.includes(`${item.label}-${subItem.label}`) ? faChevronDown : faChevronRight}
-                                  className="text-xs"
-                                />
-                              </button>
-
-                              {/* Final Nested Links */}
-                              {openDropdown.includes(`${item.label}-${subItem.label}`) && (
-                                <ul className="ml-6 mt-1 space-y-1">
-                                  {subItem.children?.map((child) => (
-                                    <li key={child.label}>
-                                      <NavLink
-                                        to={child.path || '#'}
-                                        className={({ isActive }) =>
-                                          `flex items-center px-4 py-1.5 transition-colors duration-200 rounded-md 
-                                          ${isActive ? 'bg-white text-black' : 'hover:bg-white hover:text-black'}`
-                                        }
-                                      >
-                                        <FontAwesomeIcon icon={child.icon} className="mr-2" />
-                                        {child.label}
-                                      </NavLink>
-                                    </li>
-                                  ))}
-                                </ul>
-                              )}
-                            </>
-                          ) : (
-                            // Direct Submenu Link
-                            <NavLink
-                              to={subItem.path || '#'}
-                              className={({ isActive }) =>
-                                `flex items-center px-4 py-2 transition-colors duration-200 rounded-md 
-                                ${isActive ? 'bg-white text-black' : 'hover:bg-white hover:text-black'}`
-                              }
-                            >
-                              <FontAwesomeIcon icon={subItem.icon} className="mr-2 text-base" />
-                              {subItem.label}
-                            </NavLink>
-                          )}
-                        </li>
-                      ))}
-                    </ul>
-                  )}
-                </>
-              ) : (
-                // Single-level menu
-                <NavLink
-                  to={item.path || '#'}
-                  className={({ isActive }) =>
-                    `flex items-center px-6 py-3 transition-colors duration-200 rounded-md 
-                    ${collapsed ? 'justify-center' : ''} 
-                    ${isActive ? 'bg-white text-black' : 'hover:bg-white hover:text-black'}`
-                  }
-                >
-                  <FontAwesomeIcon icon={item.icon} className={`text-lg ${collapsed ? '' : 'mr-3'}`} />
-                  {!collapsed && <span>{item.label}</span>}
-                </NavLink>
-              )}
-            </li>
-          ))}
-        </ul>
+        {NAV_ITEMS.map((item) => (
+          <NavLink
+            key={item.label}
+            to={item.path}
+            className={({ isActive }) =>
+              `flex items-center gap-3.5 px-4 py-3 rounded-2xl text-xs font-bold transition-all duration-150 ${
+                isActive
+                  ? 'bg-amber-500 text-slate-950 shadow-lg shadow-amber-500/25 font-black'
+                  : 'text-slate-400 hover:text-white hover:bg-slate-800/60'
+              }`
+            }
+          >
+            {({ isActive }) => (
+              <>
+                <FontAwesomeIcon
+                  icon={item.icon}
+                  className={`text-base w-5 text-center transition-transform duration-150 ${
+                    isActive ? 'text-slate-950 scale-110' : 'text-slate-400'
+                  }`}
+                />
+                <span className="flex-1">{item.label}</span>
+              </>
+            )}
+          </NavLink>
+        ))}
       </nav>
+
+      {/* Admin Profile & Logout Footer */}
+      <div className="p-4 border-t border-slate-800/80 bg-slate-950/40">
+        <div className="flex items-center justify-between p-2.5 rounded-2xl bg-slate-800/60 border border-slate-700/50 mb-2">
+          <div className="flex items-center gap-2.5 min-w-0">
+            <div className="w-8 h-8 rounded-full bg-amber-500/20 text-amber-400 flex items-center justify-center text-xs font-black flex-shrink-0">
+              <FontAwesomeIcon icon={faShieldAlt} />
+            </div>
+            <div className="min-w-0">
+              <span className="text-xs font-bold text-white block truncate">{adminName}</span>
+              <span className="text-[10px] text-slate-400 font-semibold block uppercase">Super Admin</span>
+            </div>
+          </div>
+        </div>
+
+        <button
+          type="button"
+          onClick={handleLogout}
+          className="w-full flex items-center justify-center gap-2 py-2.5 px-3 rounded-xl bg-slate-800 hover:bg-rose-600/20 hover:text-rose-400 text-slate-400 text-xs font-bold transition-colors"
+        >
+          <FontAwesomeIcon icon={faSignOutAlt} />
+          <span>Sign Out</span>
+        </button>
+      </div>
     </aside>
   );
 };
 
 export default Sidebar;
-

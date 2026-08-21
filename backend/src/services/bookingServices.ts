@@ -404,14 +404,31 @@ export const getAllOrders = async (req:any, res: Response) => {
 };
 
 
-export const getOrdersByStatus = async (confirmStatus: number) => {
+export const getOrdersByStatus = async (confirmStatus: any) => {
+  const statuses: any[] = [confirmStatus, String(confirmStatus)];
+  if (confirmStatus === 0 || confirmStatus === "0" || confirmStatus === "Pending") {
+    statuses.push(0, "0", "Pending", null);
+  } else if (confirmStatus === 1 || confirmStatus === "1" || confirmStatus === "Confirmed") {
+    statuses.push(1, "1", "Confirmed");
+  } else if (confirmStatus === 5 || confirmStatus === "5" || confirmStatus === "Completed") {
+    statuses.push(5, "5", "Completed");
+  } else if (confirmStatus === 6 || confirmStatus === "6" || confirmStatus === "Cancelled") {
+    statuses.push(6, "6", "Cancelled");
+  }
+
   return await Booking.findAll({
-    where: { confirmStatus },include: [
-                    { model: VehicleType ,    required: false},
-                    { model: Vehicle,    required: false },
-                ], order: [["createdAt", "DESC"]],
+    where: { confirmStatus: { [Op.in]: statuses } },
+    include: [
+      { model: VehicleType, as: "vehicleType", required: false },
+      { model: Vehicle, as: "vehicle", required: false },
+      { model: User, as: "user", required: false },
+      { model: Drivers, as: "driver", required: false },
+      { model: Invoice, as: "invoice", required: false },
+    ],
+    order: [["createdAt", "DESC"]],
   });
 };
+
 
 export const editBooking = async (req: any, res: Response) => {
   try {
@@ -4737,3 +4754,204 @@ export const downloadUserInvoicePdf = async (req: any, res: Response) => {
     return res.status(500).json({ success: false, message: "Failed to generate PDF", error: err?.message });
   }
 };
+
+export const getDashboardStats = async (req: Request, res: Response) => {
+  try {
+    const totalBookings = await Booking.count();
+    
+    const pendingCount = await Booking.count({
+      where: {
+        confirmStatus: { [Op.in]: [0, "0", "Pending", null] }
+      }
+    });
+
+    const confirmedCount = await Booking.count({
+      where: {
+        confirmStatus: { [Op.in]: [1, "1", "Confirmed"] }
+      }
+    });
+
+    const completedCount = await Booking.count({
+      where: {
+        confirmStatus: { [Op.in]: [5, "5", "Completed"] }
+      }
+    });
+
+    const cancelledCount = await Booking.count({
+      where: {
+        confirmStatus: { [Op.in]: [6, "6", "Cancelled"] }
+      }
+    });
+
+    const totalUsers = await User.count({
+      where: {
+        role: "user"
+      }
+    });
+
+    const activeVehicles = await Vehicle.count({
+      where: {
+        isDeleted: false
+      }
+    });
+
+    // Sum revenue from finalFare
+    const revenueResult = await Booking.findAll({
+      attributes: [
+        [fn("SUM", col("finalFare")), "totalRevenue"]
+      ],
+      where: {
+        confirmStatus: { [Op.in]: [1, "1", "Confirmed", 5, "5", "Completed"] }
+      },
+      raw: true
+    });
+
+    const totalRevenue = Number((revenueResult[0] as any)?.totalRevenue) || 0;
+
+    return res.status(200).json({
+      success: true,
+      data: {
+        totalBookings,
+        pendingCount,
+        confirmedCount,
+        completedCount,
+        cancelledCount,
+        totalUsers,
+        activeVehicles,
+        totalRevenue
+      }
+    });
+  } catch (error: any) {
+    console.error("Dashboard Stats Error:", error);
+    return res.status(500).json({
+      success: false,
+      message: "Failed to fetch dashboard statistics",
+      error: error.message
+    });
+  }
+};
+
+export const updateBookingStatus = async (req: Request, res: Response) => {
+  try {
+    const bookingId = req.params.bookingId || req.body.bookingId;
+    const { status, remarks, driverId, vehicleId } = req.body;
+
+    if (!bookingId) {
+      return res.status(400).json({
+        success: false,
+        message: "Booking ID is required"
+      });
+    }
+
+    const booking = await Booking.findByPk(bookingId);
+    if (!booking) {
+      return res.status(404).json({
+        success: false,
+        message: "Booking not found"
+      });
+    }
+
+    const validStatuses = ["Pending", "Confirmed", "Completed", "Cancelled"];
+    const targetStatus = status || "Confirmed";
+
+    if (!validStatuses.includes(targetStatus)) {
+      return res.status(400).json({
+        success: false,
+        message: `Invalid status. Must be one of: ${validStatuses.join(", ")}`
+      });
+    }
+
+    const updates: any = {
+      confirmStatus: targetStatus,
+      bookingStatus: targetStatus
+    };
+
+    if (remarks) updates.remarks = remarks;
+    if (driverId) updates.driverId = driverId;
+    if (vehicleId) updates.vehicleId = vehicleId;
+
+    await booking.update(updates);
+
+    const updated = await Booking.findByPk(bookingId, {
+      include: [
+        { model: User, as: "user", required: false },
+        { model: VehicleType, as: "vehicleType", required: false },
+        { model: Vehicle, as: "vehicle", required: false },
+        { model: Drivers, as: "driver", required: false }
+      ]
+    });
+
+    return res.status(200).json({
+      success: true,
+      message: `Booking status updated to ${targetStatus} successfully`,
+      data: updated
+    });
+  } catch (error: any) {
+    console.error("Update Booking Status Error:", error);
+    return res.status(500).json({
+      success: false,
+      message: "Failed to update booking status",
+      error: error.message
+    });
+  }
+};
+
+export const getAllAdminBookings = async (req: Request, res: Response) => {
+  try {
+    const { status, search, limit = 50 } = req.query;
+
+    const whereClause: any = {};
+
+    if (status && status !== "all" && status !== "ALL") {
+      const s = String(status).toLowerCase();
+      if (s === "pending") {
+        whereClause.confirmStatus = { [Op.in]: ["Pending", "0", 0, null] };
+      } else if (s === "confirmed") {
+        whereClause.confirmStatus = { [Op.in]: ["Confirmed", "1", 1] };
+      } else if (s === "completed") {
+        whereClause.confirmStatus = { [Op.in]: ["Completed", "5", 5] };
+      } else if (s === "cancelled") {
+        whereClause.confirmStatus = { [Op.in]: ["Cancelled", "6", 6] };
+      }
+    }
+
+    if (search && String(search).trim() !== "") {
+      const term = `%${String(search).trim()}%`;
+      whereClause[Op.or] = [
+        { bookingCode: { [Op.like]: term } },
+        { pickupPoint: { [Op.like]: term } },
+        { dropPoint: { [Op.like]: term } },
+        { behalfOfName: { [Op.like]: term } },
+        { behalfOfPhone: { [Op.like]: term } }
+      ];
+    }
+
+    const bookings = await Booking.findAll({
+      where: whereClause,
+      include: [
+        { model: User, as: "user", required: false },
+        { model: VehicleType, as: "vehicleType", required: false },
+        { model: Vehicle, as: "vehicle", required: false },
+        { model: Drivers, as: "driver", required: false },
+        { model: Invoice, as: "invoice", required: false }
+      ],
+      order: [["createdAt", "DESC"]],
+      limit: Number(limit) || 50
+    });
+
+    return res.status(200).json({
+      success: true,
+      count: bookings.length,
+      data: bookings
+    });
+  } catch (error: any) {
+    console.error("Get All Admin Bookings Error:", error);
+    return res.status(500).json({
+      success: false,
+      message: "Failed to fetch bookings",
+      error: error.message
+    });
+  }
+};
+
+

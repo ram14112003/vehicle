@@ -60,6 +60,21 @@ export class VehicleType extends Model {
   defaultValue: "regular",
 })
 bookingType!: string;
+
+  @Column({
+    type: DataType.FLOAT,
+    allowNull: false,
+    defaultValue: 250,
+  })
+  baseFare!: number;
+
+  @Column({
+    type: DataType.FLOAT,
+    allowNull: false,
+    defaultValue: 14,
+  })
+  perKmRate!: number;
+
   @CreatedAt
   @Column(DataType.DATE)
   createdAt!: Date;

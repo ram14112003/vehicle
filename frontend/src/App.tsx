@@ -140,6 +140,10 @@ import PaymentForMonthlyInvoices from './SuperAdmin/pages/Invoice/PaymentForMont
 import UploadUsers from './SuperAdmin/pages/uploadfile/uploadfile';
 import Oncallinvoice from './SuperAdmin/pages/Users/Bookings/oncallbooking';
 import OnCallInvoiceView from './SuperAdmin/pages/Orders/view/Oncallinvoiceview';
+import BookingPage from './pages/BookingPage';
+import MyBookings from './pages/MyBookings';
+import BookingSuccess from './pages/BookingSuccess';
+
 
 const Layout = () => {
 
@@ -259,10 +263,15 @@ const App: React.FC = () => {
     <AuthProvider>
       <BrowserRouter>
         <Routes>
-                   {/* <Route path="/" element={<GraceCab />} /> */}
-                   <Route path="/" element={<HomePage/>} />
+          <Route path="/" element={<HomePage />} />
+          <Route path="/book" element={<BookingPage />} />
+          <Route path="/my-bookings" element={<MyBookings />} />
+          <Route path="/booking-history" element={<MyBookings />} />
+          <Route path="/booking-success" element={<BookingSuccess />} />
+          <Route path="/booking-success/:bookingCode" element={<BookingSuccess />} />
+          <Route path="/login" element={<Login />} />
           <Route path="/adminlogin" element={<Login />} />
-                    <Route path="/forgetpasword" element={<ForgotPassword />} />
+          <Route path="/forgetpasword" element={<ForgotPassword />} />
 
           <Route path="/managerusers/list/:id" element={<ManagerUserList />} />
           <Route path="/users/userviewdetails/:userId" element={<UserViewDetails />} />

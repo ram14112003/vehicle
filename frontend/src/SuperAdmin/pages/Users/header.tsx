@@ -148,12 +148,13 @@ const TravelHeader: React.FC = () => {
 
                <li>
               <Link
-                to={`/users/userinvoice/${userId}?companyId=${companyId}`}
-                className={getMenuClasses(`/users/userinvoice/${userId}`)}
+                to="/book"
+                className={getMenuClasses("/book")}
               >
                 Online Booking
               </Link>
             </li>
+
             <li>
               <Link
                 to={`/users/useraccount/${userId}`}
@@ -219,12 +220,21 @@ const TravelHeader: React.FC = () => {
                   <ul className="py-2">
                     <li>
                       <Link
+                        to="/my-bookings"
+                        className="block px-4 py-2 font-bold text-blue-600 hover:bg-blue-50"
+                      >
+                        All My Bookings (New)
+                      </Link>
+                    </li>
+                    <li>
+                      <Link
                         to={`/Users/BookingHistory/MyorderDetails/${userId}?companyId=${companyId}`}
                         className="block px-4 py-2 text-gray-700 hover:bg-gray-50 hover:text-blue-600"
                       >
                         My Order details
                       </Link>
                     </li>
+
                     <li>
                       <Link
                         to={`/Users/BookingHistory/MycancelorderDetails/${userId}?companyId=${companyId}`}

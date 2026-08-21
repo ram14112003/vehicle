@@ -62,24 +62,20 @@ const [otp, setOtp] = useState('');
 
         console.log('✅ User object stored:', userObject);
 
-        login();
+        login(accessToken, userObject);
 
         // Navigate based on role
-        if (role === "superadmin") {
+        if (role === "superadmin" || role === "admin") {
           navigate('/dashboard');
-        } 
-        else if (role === "admin") {
-          navigate('/dashboard');
-        }
-        else if (role === "manager") {
+        } else if (role === "manager") {
           navigate(`/users/useraccount/${id}`);
-        } 
-        else if (role === "user") {
-          navigate(`/users/useraccount/${id}`);
+        } else {
+          navigate('/my-bookings');
         }
       } else {
         setErrors({ server: 'Login failed. Please try again.' });
       }
+
     } catch (error: any) {
       const errorMsg = error?.response?.data?.message || 'Login failed. Please check credentials.';
       setErrors((prev) => ({ ...prev, server: errorMsg }));

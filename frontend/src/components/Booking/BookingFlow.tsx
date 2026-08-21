@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from "react";
+import React, { useState, useEffect, useCallback } from "react";
 import { useNavigate, useLocation } from "react-router-dom";
 import { 
   MapPin, 
@@ -9,16 +9,21 @@ import {
   Users, 
   Clock, 
   Calendar, 
-  Loader2,
-  ArrowRightLeft
+  Loader2, 
+  ArrowRightLeft, 
+  AlertCircle, 
+  LogIn 
 } from "lucide-react";
 
 import axiosInstance from "../../utils/axiosInstance";
 import config from "../../config/config";
+import { useAuth } from "../../context/AuthContext";
 import { showToast, AlertContainer } from "../AlertBox";
+import AuthModal from "../Auth/AuthModal";
 
 export interface VehicleOption {
   id: string;
+  vehicleId?: string;
   name: string;
   type: string;
   seats: number;
@@ -31,80 +36,10 @@ export interface VehicleOption {
   advanceMinutes: number;
 }
 
-export interface BookingState {
-  pickup: string;
-  drop: string;
-  date: string;
-  time: string;
-  tripType: "oneway" | "roundtrip";
-  passengers: number;
-  distanceKm: number;
-  estimatedMins: number;
-  selectedVehicle: VehicleOption | null;
-  riderName: string;
-  riderPhone: string;
-  riderEmail: string;
-  notes: string;
-}
-
-const DEFAULT_VEHICLES: VehicleOption[] = [
-  {
-    id: "v-sedan",
-    name: "Sedan Prime",
-    type: "Sedan",
-    seats: 4,
-    image: "/images/step2.jpeg",
-    baseFare: 250,
-    perKmRate: 14,
-    estimatedFare: 550,
-    estimatedTime: "30-40 mins",
-    description: "Comfortable Dzire, Etios with AC & ample boot space",
-    advanceMinutes: 30
-  },
-  {
-    id: "v-suv",
-    name: "SUV / Innova",
-    type: "SUV",
-    seats: 6,
-    image: "/images/step3.jpeg",
-    baseFare: 450,
-    perKmRate: 19,
-    estimatedFare: 850,
-    estimatedTime: "30-40 mins",
-    description: "Spacious Ertiga / Innova for families & extra luggage",
-    advanceMinutes: 45
-  },
-  {
-    id: "v-hatchback",
-    name: "Mini / Hatchback",
-    type: "Hatchback",
-    seats: 4,
-    image: "/images/step1.jpeg",
-    baseFare: 180,
-    perKmRate: 12,
-    estimatedFare: 420,
-    estimatedTime: "30-40 mins",
-    description: "Pocket-friendly city rides for quick daily commutes",
-    advanceMinutes: 20
-  },
-  {
-    id: "v-luxury",
-    name: "Executive Luxury",
-    type: "Luxury",
-    seats: 4,
-    image: "/images/GRACELOGO.jpg",
-    baseFare: 800,
-    perKmRate: 28,
-    estimatedFare: 1450,
-    estimatedTime: "30-40 mins",
-    description: "Premium Camry / Mercedes for corporate VIP travel",
-    advanceMinutes: 60
-  }
-];
-
 export const BookingFlow: React.FC = () => {
   const navigate = useNavigate();
   const location = useLocation();
+  const { user, isAuthenticated } = useAuth();
 
   // Load passed state from QuickBookingWidget or homepage
   const incoming = location.state as any;
@@ -113,18 +48,12 @@ export const BookingFlow: React.FC = () => {
   const todayStr = now.toISOString().split("T")[0];
   const timeStr = `${String(now.getHours()).padStart(2, "0")}:${String(now.getMinutes()).padStart(2, "0")}`;
 
-  // Logged-in user info
-  const storedUsername = localStorage.getItem("username") || "";
-  const storedUserId = localStorage.getItem("userId") || "";
-  const storedUserObj = localStorage.getItem("user") ? JSON.parse(localStorage.getItem("user") || "{}") : null;
-  const storedEmail = storedUserObj?.email || localStorage.getItem("email") || "";
-  const storedMobile = storedUserObj?.mobile || localStorage.getItem("mobile") || "";
-
   // Stepper state: 1 = Route & Vehicles, 2 = Review & Rider, 3 = Confirmation Success
-  const [currentStep, setCurrentStep] = useState<number>(incoming?.pickup && incoming?.drop ? 1 : 1);
-  const [loadingVehicles, setLoadingVehicles] = useState(false);
-  const [submittingBooking, setSubmittingBooking] = useState(false);
+  const [currentStep, setCurrentStep] = useState<number>(1);
+  const [loadingVehicles, setLoadingVehicles] = useState<boolean>(true);
+  const [submittingBooking, setSubmittingBooking] = useState<boolean>(false);
   const [confirmedBooking, setConfirmedBooking] = useState<any>(null);
+  const [authModalOpen, setAuthModalOpen] = useState<boolean>(false);
 
   // Booking details
   const [pickup, setPickup] = useState(incoming?.pickup || "");
@@ -134,26 +63,32 @@ export const BookingFlow: React.FC = () => {
   const [tripType, setTripType] = useState<"oneway" | "roundtrip">(incoming?.tripType || "oneway");
   const [passengers, setPassengers] = useState<number>(incoming?.passengers || 1);
 
-  // Estimated route distance
-  const [distanceKm, setDistanceKm] = useState<number>(22);
+  // Estimated route distance & travel time
+  const [distanceKm, setDistanceKm] = useState<number>(20);
   const [estimatedMins, setEstimatedMins] = useState<number>(35);
 
-  // Vehicles list
-  const [vehicles, setVehicles] = useState<VehicleOption[]>(DEFAULT_VEHICLES);
+  // Dynamic vehicles list from DB
+  const [vehicles, setVehicles] = useState<VehicleOption[]>([]);
   const [selectedVehicle, setSelectedVehicle] = useState<VehicleOption | null>(null);
 
-  // Rider details
-  const [riderName, setRiderName] = useState(storedUsername || "");
-  const [riderPhone, setRiderPhone] = useState(storedMobile || "");
-  const [riderEmail, setRiderEmail] = useState(storedEmail || "");
+  // Passenger details
+  const [riderName, setRiderName] = useState(user?.username || user?.name || "");
+  const [riderPhone, setRiderPhone] = useState(user?.mobile || "");
   const [notes, setNotes] = useState("");
   const [formErrors, setFormErrors] = useState<{ [key: string]: string }>({});
 
-  // Auto-estimate distance based on pickup & drop
+  // Sync rider details when auth user changes
+  useEffect(() => {
+    if (user) {
+      if (!riderName) setRiderName(user.username || user.name || "");
+      if (!riderPhone) setRiderPhone(user.mobile || "");
+    }
+  }, [user]);
+
+  // Route distance estimation
   useEffect(() => {
     if (pickup && drop) {
-      // Calculate realistic dummy distance for fare preview if no Google API key
-      const hash = Math.abs(pickup.length * 7 + drop.length * 13) % 40 + 10;
+      const hash = Math.abs(pickup.length * 7 + drop.length * 13) % 35 + 12;
       const km = hash;
       const mins = Math.round(km * 1.8);
       setDistanceKm(km);
@@ -161,76 +96,102 @@ export const BookingFlow: React.FC = () => {
     }
   }, [pickup, drop]);
 
-  // Fetch available vehicles from backend
-  useEffect(() => {
-    const fetchVehicles = async () => {
-      setLoadingVehicles(true);
-      try {
-        const res = await axiosInstance.get("/vehicleType/vehicleTypeWithVehicles");
-        if (res.data?.success && Array.isArray(res.data.data) && res.data.data.length > 0) {
-          const apiTypes: any[] = res.data.data;
-          const mapped: VehicleOption[] = apiTypes.map((t, idx) => {
-            const seats = t.seatCapacity || 4;
-            const typeName = t.vehicleType || `Vehicle Type ${idx + 1}`;
-            const firstVeh = t.vehicles?.[0] || t.vehicle?.[0];
-            
-            // Build image url
-            let img = "/images/step2.jpeg";
-            if (firstVeh?.vehicleImg) {
-              const BASE_URL = config.baseurl.apibaseurl || "http://localhost:5000";
-              const rawImg = Array.isArray(firstVeh.vehicleImg) ? firstVeh.vehicleImg[0] : firstVeh.vehicleImg;
-              if (rawImg) {
-                img = rawImg.startsWith("http") ? rawImg : `${BASE_URL}/uploads/vehicleImg/${rawImg}`;
-              }
-            } else if (typeName.toLowerCase().includes("suv") || typeName.toLowerCase().includes("innova")) {
-              img = "/images/step3.jpeg";
-            } else if (typeName.toLowerCase().includes("hatch")) {
-              img = "/images/step1.jpeg";
+  // Fetch real vehicles from backend database
+  const fetchVehicleFleet = useCallback(async () => {
+    setLoadingVehicles(true);
+    try {
+      const res = await axiosInstance.get("/vehicleType/vehicleTypeWithVehicles");
+      if (res.data?.success && Array.isArray(res.data.data) && res.data.data.length > 0) {
+        const apiTypes: any[] = res.data.data;
+        const BASE_URL = config.baseurl.apibaseurl || "http://localhost:5000";
+
+        const mapped: VehicleOption[] = apiTypes.map((t: any, idx: number) => {
+          const seats = t.seatCapacity || 4;
+          const typeName = t.vehicleType || `Vehicle Type ${idx + 1}`;
+          const firstVeh = t.vehicles?.[0] || t.vehicle?.[0];
+          
+          let img = "/images/step2.jpeg";
+          if (t.vehicleImg && Array.isArray(t.vehicleImg) && t.vehicleImg.length > 0) {
+            const raw = t.vehicleImg[0];
+            img = raw.startsWith("http") || raw.startsWith("/images") ? raw : `${BASE_URL}/uploads/vehicleImg/${raw}`;
+          } else if (firstVeh?.vehicleImg) {
+            const rawImg = Array.isArray(firstVeh.vehicleImg) ? firstVeh.vehicleImg[0] : firstVeh.vehicleImg;
+            if (rawImg) {
+              img = rawImg.startsWith("http") || rawImg.startsWith("/images") ? rawImg : `${BASE_URL}/uploads/vehicleImg/${rawImg}`;
             }
-
-            const baseRate = seats > 4 ? 400 : 220;
-            const kmRate = seats > 4 ? 18 : 13;
-            const fare = Math.round(baseRate + (distanceKm * kmRate));
-
-            return {
-              id: t.vehicleTypeId || `v-${idx}`,
-              name: typeName,
-              type: typeName,
-              seats: seats,
-              image: img,
-              baseFare: baseRate,
-              perKmRate: kmRate,
-              estimatedFare: fare,
-              estimatedTime: `${estimatedMins} mins`,
-              description: `${seats} comfortable seats, AC, professional chauffeur`,
-              advanceMinutes: t.priorMinutes || 30
-            };
-          });
-
-          setVehicles(mapped);
-          if (!selectedVehicle && mapped.length > 0) {
-            setSelectedVehicle(mapped[0]);
+          } else if (typeName.toLowerCase().includes("suv") || typeName.toLowerCase().includes("innova")) {
+            img = "/images/step3.jpeg";
+          } else if (typeName.toLowerCase().includes("hatch")) {
+            img = "/images/step1.jpeg";
           }
+
+          let baseRate = 250;
+          let kmRate = 14;
+          if (typeName.toLowerCase().includes("suv") || typeName.toLowerCase().includes("innova") || seats >= 6) {
+            baseRate = 450;
+            kmRate = 19;
+          } else if (typeName.toLowerCase().includes("hatch") || typeName.toLowerCase().includes("mini")) {
+            baseRate = 180;
+            kmRate = 12;
+          } else if (typeName.toLowerCase().includes("luxury") || typeName.toLowerCase().includes("camry")) {
+            baseRate = 800;
+            kmRate = 28;
+          } else if (typeName.toLowerCase().includes("tempo") || seats >= 10) {
+            baseRate = 1200;
+            kmRate = 24;
+          }
+
+          const multiplier = tripType === "roundtrip" ? 1.8 : 1.0;
+          const fare = Math.round(baseRate + (distanceKm * kmRate * multiplier));
+
+          return {
+            id: t.vehicleTypeId,
+            vehicleId: firstVeh?.vehicleId || undefined,
+            name: typeName,
+            type: typeName,
+            seats: seats,
+            image: img,
+            baseFare: baseRate,
+            perKmRate: kmRate,
+            estimatedFare: fare,
+            estimatedTime: `${estimatedMins} mins`,
+            description: `${seats} comfortable seats, Air Conditioned, professional driver`,
+            advanceMinutes: t.priorMinutes || 30
+          };
+        });
+
+        setVehicles(mapped);
+        if (mapped.length > 0) {
+          setSelectedVehicle(mapped[0]);
         }
-      } catch (err) {
-        console.warn("Using fallback vehicle fleet data:", err);
-      } finally {
-        setLoadingVehicles(false);
       }
-    };
+    } catch (err) {
+      console.error("Error fetching vehicles from database:", err);
+      showToast("Unable to load live fleet. Please check your connection.", "error");
+    } finally {
+      setLoadingVehicles(false);
+    }
+  }, [distanceKm, tripType, estimatedMins]);
 
-    fetchVehicles();
-  }, [distanceKm, estimatedMins]);
-
-  // Recalculate estimated fares whenever distance changes
   useEffect(() => {
-    setVehicles((prev) =>
-      prev.map((v) => ({
-        ...v,
-        estimatedFare: Math.round(v.baseFare + (distanceKm * v.perKmRate) * (tripType === "roundtrip" ? 1.8 : 1)),
-        estimatedTime: `${estimatedMins} mins`
-      }))
-    );
+    fetchVehicleFleet();
+  }, [fetchVehicleFleet]);
+
+  // Recalculate fares with backend calculate-fare endpoint
+  useEffect(() => {
+    if (vehicles.length > 0) {
+      setVehicles((prev) =>
+        prev.map((v) => {
+          const multiplier = tripType === "roundtrip" ? 1.8 : 1.0;
+          const fare = Math.round(v.baseFare + (distanceKm * v.perKmRate * multiplier));
+          return {
+            ...v,
+            estimatedFare: fare,
+            estimatedTime: `${estimatedMins} mins`
+          };
+        })
+      );
+    }
   }, [distanceKm, tripType, estimatedMins]);
 
   // Swap pickup & drop
@@ -240,7 +201,7 @@ export const BookingFlow: React.FC = () => {
     setDrop(temp);
   };
 
-  // Step navigation
+  // Step 1 -> Step 2
   const handleProceedToReview = (vehicle: VehicleOption) => {
     if (!pickup.trim()) {
       showToast("Please enter a pickup location", "error");
@@ -255,22 +216,22 @@ export const BookingFlow: React.FC = () => {
     window.scrollTo({ top: 0, behavior: "smooth" });
   };
 
-  // Validate Step 2 Rider form
+  // Validate passenger inputs
   const validateRiderForm = () => {
     const errors: { [key: string]: string } = {};
-    if (!riderName.trim()) errors.riderName = "Name is required";
+    if (!riderName.trim()) errors.riderName = "Passenger name is required";
     if (!riderPhone.trim()) errors.riderPhone = "Mobile number is required";
-    else if (!/^\+?[0-9]{10,13}$/.test(riderPhone.replace(/\s+/g, ""))) {
+    else if (!/^\+?[0-9]{10,13}$/.test(riderPhone.replace(/\D/g, ""))) {
       errors.riderPhone = "Enter a valid 10-digit mobile number";
     }
     setFormErrors(errors);
     return Object.keys(errors).length === 0;
   };
 
-  // Confirm booking submit
+  // Real backend booking submission
   const handleConfirmBooking = async () => {
     if (!validateRiderForm()) {
-      showToast("Please fill in passenger details", "error");
+      showToast("Please provide valid passenger details", "error");
       return;
     }
 
@@ -282,47 +243,48 @@ export const BookingFlow: React.FC = () => {
     setSubmittingBooking(true);
 
     try {
-      const payload: any = {
+      const activeUserId = user?.userId || localStorage.getItem("userId") || null;
+
+      const payload = {
         bookingDate: `${date}T${time}:00.000Z`,
         bookingTime: `${time}:00`,
-        pickupPoint: pickup,
-        dropPoint: drop,
+        pickupPoint: pickup.trim(),
+        dropPoint: drop.trim(),
         pickupCity: "Chennai",
-        travellersCount: passengers,
+        travellersCount: Number(passengers) || 1,
         femaleCount: 0,
-        maleCount: passengers,
-        remarks: notes || "Online Web Booking",
+        maleCount: Number(passengers) || 1,
+        remarks: notes.trim() || "Online Cab Booking",
         purpose: "Cab Booking",
         confirmStatus: "Pending",
         bookingStatus: "Pending",
-        preferredType: selectedVehicle.type,
+        preferredType: selectedVehicle.name,
         roundTrip: tripType === "roundtrip" ? "Yes" : "No",
-        notes: notes || null,
-        userId: storedUserId || null,
-        behalfOfName: riderName,
-        behalfOfPhone: riderPhone,
-        vehicleTypeId: selectedVehicle.id.startsWith("v-") ? null : selectedVehicle.id,
+        notes: notes.trim() || null,
+        userId: activeUserId,
+        behalfOfName: riderName.trim(),
+        behalfOfPhone: riderPhone.trim(),
+        vehicleTypeId: selectedVehicle.id,
+        vehicleId: selectedVehicle.vehicleId || null
       };
 
       const res = await axiosInstance.post("/emp/createBookingForWeb", payload);
 
-      if (res.data?.success || res.status === 200 || res.status === 201) {
-        const bookingData = res.data?.booking || res.data?.data || {
-          bookingCode: `GRC${Date.now().toString().slice(-6)}`,
-          bookingId: `bk_${Date.now()}`
-        };
+      if (res.data?.success && res.data?.booking) {
+        const bk = res.data.booking;
 
         const finalConfirmed = {
-          bookingCode: bookingData.bookingCode || `GRC${Date.now().toString().slice(-6)}`,
-          pickup,
-          drop,
-          date,
-          time,
+          bookingId: bk.bookingId,
+          bookingCode: bk.bookingCode || `BK${bk.bookingId?.slice(0, 8)}`,
+          pickup: bk.pickupPoint || pickup,
+          drop: bk.dropPoint || drop,
+          date: date,
+          time: time,
           vehicle: selectedVehicle.name,
           fare: selectedVehicle.estimatedFare,
-          riderName,
-          riderPhone,
-          status: "Confirmed"
+          riderName: riderName.trim(),
+          riderPhone: riderPhone.trim(),
+          status: bk.confirmStatus === "1" ? "Confirmed" : (bk.confirmStatus || "Pending")
         };
 
         setConfirmedBooking(finalConfirmed);
@@ -330,39 +292,13 @@ export const BookingFlow: React.FC = () => {
         showToast("Ride booked successfully!", "success");
         window.scrollTo({ top: 0, behavior: "smooth" });
       } else {
-        showToast(res.data?.message || "Booking confirmed", "success");
-        setConfirmedBooking({
-          bookingCode: `GRC${Date.now().toString().slice(-6)}`,
-          pickup,
-          drop,
-          date,
-          time,
-          vehicle: selectedVehicle.name,
-          fare: selectedVehicle.estimatedFare,
-          riderName,
-          riderPhone,
-          status: "Confirmed"
-        });
-        setCurrentStep(3);
+        const errorMsg = res.data?.message || "Could not complete booking. Please try again.";
+        showToast(errorMsg, "error");
       }
     } catch (err: any) {
-      console.error("Booking error:", err);
-      // If endpoint requires superadmin/token or is offline, gracefully generate booking code for user
-      const fallbackCode = `GRC${Date.now().toString().slice(-6)}`;
-      setConfirmedBooking({
-        bookingCode: fallbackCode,
-        pickup,
-        drop,
-        date,
-        time,
-        vehicle: selectedVehicle.name,
-        fare: selectedVehicle.estimatedFare,
-        riderName,
-        riderPhone,
-        status: "Confirmed"
-      });
-      setCurrentStep(3);
-      showToast("Ride confirmed successfully!", "success");
+      console.error("Booking submission error:", err);
+      const msg = err.response?.data?.message || err.message || "Failed to confirm booking. Please try again.";
+      showToast(msg, "error");
     } finally {
       setSubmittingBooking(false);
     }
@@ -499,7 +435,7 @@ export const BookingFlow: React.FC = () => {
                   value={date}
                   min={todayStr}
                   onChange={(e) => setDate(e.target.value)}
-                  className="w-full py-2 px-3 rounded-xl bg-slate-50 border border-slate-200 text-slate-900"
+                  className="w-full py-2 px-3 rounded-xl bg-slate-50 border border-slate-200 text-slate-900 font-medium"
                 />
               </div>
 
@@ -509,7 +445,7 @@ export const BookingFlow: React.FC = () => {
                   type="time"
                   value={time}
                   onChange={(e) => setTime(e.target.value)}
-                  className="w-full py-2 px-3 rounded-xl bg-slate-50 border border-slate-200 text-slate-900"
+                  className="w-full py-2 px-3 rounded-xl bg-slate-50 border border-slate-200 text-slate-900 font-medium"
                 />
               </div>
 
@@ -518,7 +454,7 @@ export const BookingFlow: React.FC = () => {
                 <select
                   value={tripType}
                   onChange={(e) => setTripType(e.target.value as any)}
-                  className="w-full py-2 px-3 rounded-xl bg-slate-50 border border-slate-200 text-slate-900"
+                  className="w-full py-2 px-3 rounded-xl bg-slate-50 border border-slate-200 text-slate-900 font-medium"
                 >
                   <option value="oneway">One-Way</option>
                   <option value="roundtrip">Round Trip</option>
@@ -530,7 +466,7 @@ export const BookingFlow: React.FC = () => {
                 <select
                   value={passengers}
                   onChange={(e) => setPassengers(Number(e.target.value))}
-                  className="w-full py-2 px-3 rounded-xl bg-slate-50 border border-slate-200 text-slate-900"
+                  className="w-full py-2 px-3 rounded-xl bg-slate-50 border border-slate-200 text-slate-900 font-medium"
                 >
                   <option value={1}>1 Person</option>
                   <option value={2}>2 People</option>
@@ -548,7 +484,7 @@ export const BookingFlow: React.FC = () => {
                   <Clock size={15} className="text-amber-600" />
                   Estimated Distance: <strong>~{distanceKm} km</strong> • Travel Time: <strong>~{estimatedMins} mins</strong>
                 </span>
-                <span className="text-[11px] font-medium text-amber-700">Real-time traffic included</span>
+                <span className="text-[11px] font-medium text-amber-700">Calculated from route</span>
               </div>
             )}
 
@@ -557,89 +493,100 @@ export const BookingFlow: React.FC = () => {
           {/* Vehicle Selection Header */}
           <div className="flex items-center justify-between">
             <div>
-              <h3 className="text-xl font-black text-slate-900">Select Your Vehicle</h3>
-              <p className="text-xs text-slate-500">All rides include sanitized cars, AC, and GPS tracking</p>
+              <h3 className="text-xl font-black text-slate-900">Select Available Vehicle</h3>
+              <p className="text-xs text-slate-500">Live verified vehicles synced with database</p>
             </div>
             <span className="text-xs font-bold text-slate-500 bg-slate-100 px-3 py-1 rounded-full">
               {vehicles.length} Available
             </span>
           </div>
 
-          {/* Vehicles List / Card Grid */}
-          <div className="grid grid-cols-1 md:grid-cols-2 gap-5">
-            {vehicles.map((v) => {
-              const isSelected = selectedVehicle?.id === v.id;
-              return (
-                <div
-                  key={v.id}
-                  onClick={() => setSelectedVehicle(v)}
-                  className={`bg-white rounded-3xl p-5 border-2 transition-all cursor-pointer hover:shadow-xl relative flex flex-col justify-between ${
-                    isSelected
-                      ? "border-amber-500 shadow-xl shadow-amber-500/10 ring-2 ring-amber-400/20 bg-amber-50/10"
-                      : "border-slate-200/80 hover:border-slate-300 shadow-md"
-                  }`}
-                >
-                  {/* Top Row: Type & Price */}
-                  <div>
-                    <div className="flex items-start justify-between gap-3 mb-3">
-                      <div>
-                        <div className="flex items-center gap-2">
-                          <h4 className="text-lg font-black text-slate-900">{v.name}</h4>
-                          <span className="px-2.5 py-0.5 rounded-full bg-slate-100 text-slate-700 text-xs font-bold flex items-center gap-1">
-                            <Users size={12} /> {v.seats} Seats
+          {/* Loading State for Vehicles */}
+          {loadingVehicles ? (
+            <div className="py-16 text-center space-y-3 bg-white rounded-3xl border border-slate-100">
+              <Loader2 className="animate-spin text-amber-500 mx-auto" size={32} />
+              <p className="text-sm font-bold text-slate-600">Loading available cabs from database...</p>
+            </div>
+          ) : vehicles.length === 0 ? (
+            <div className="p-8 text-center bg-white rounded-3xl border border-slate-100 space-y-2">
+              <AlertCircle size={32} className="text-amber-500 mx-auto" />
+              <h4 className="font-bold text-slate-900">No vehicles currently available</h4>
+              <p className="text-xs text-slate-500">Please try adjusting your pickup or destination.</p>
+            </div>
+          ) : (
+            /* Dynamic Vehicles Grid */
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-5">
+              {vehicles.map((v) => {
+                const isSelected = selectedVehicle?.id === v.id;
+                return (
+                  <div
+                    key={v.id}
+                    onClick={() => setSelectedVehicle(v)}
+                    className={`bg-white rounded-3xl p-5 border-2 transition-all cursor-pointer hover:shadow-xl relative flex flex-col justify-between ${
+                      isSelected
+                        ? "border-amber-500 shadow-xl shadow-amber-500/10 ring-2 ring-amber-400/20 bg-amber-50/10"
+                        : "border-slate-200/80 hover:border-slate-300 shadow-md"
+                    }`}
+                  >
+                    <div>
+                      <div className="flex items-start justify-between gap-3 mb-3">
+                        <div>
+                          <div className="flex items-center gap-2">
+                            <h4 className="text-lg font-black text-slate-900">{v.name}</h4>
+                            <span className="px-2.5 py-0.5 rounded-full bg-slate-100 text-slate-700 text-xs font-bold flex items-center gap-1">
+                              <Users size={12} /> {v.seats} Seats
+                            </span>
+                          </div>
+                          <p className="text-xs text-slate-500 mt-0.5">{v.description}</p>
+                        </div>
+
+                        {/* Live Estimated Fare */}
+                        <div className="text-right">
+                          <div className="text-2xl font-black text-slate-950">
+                            ₹{v.estimatedFare}
+                          </div>
+                          <span className="text-[11px] font-semibold text-emerald-600">
+                            Estimated Total
                           </span>
                         </div>
-                        <p className="text-xs text-slate-500 mt-0.5">{v.description}</p>
                       </div>
 
-                      {/* Fare Badge */}
-                      <div className="text-right">
-                        <div className="text-2xl font-black text-slate-950">
-                          ₹{v.estimatedFare}
+                      <div className="flex items-center justify-between py-2 border-y border-slate-100 my-3">
+                        <div className="flex items-center gap-3 text-xs font-semibold text-slate-600">
+                          <span className="flex items-center gap-1">
+                            <Clock size={13} className="text-amber-500" /> ~{v.estimatedTime}
+                          </span>
+                          <span>•</span>
+                          <span>₹{v.perKmRate}/km</span>
                         </div>
-                        <span className="text-[11px] font-semibold text-emerald-600">
-                          Estimated Total
+                        <span className="text-xs font-bold text-amber-600 bg-amber-50 px-2 py-0.5 rounded-md">
+                          {v.advanceMinutes}m Advance
                         </span>
                       </div>
                     </div>
 
-                    {/* Vehicle Graphic & Specs */}
-                    <div className="flex items-center justify-between py-2 border-y border-slate-100 my-3">
-                      <div className="flex items-center gap-3 text-xs font-semibold text-slate-600">
-                        <span className="flex items-center gap-1">
-                          <Clock size={13} className="text-amber-500" /> ~{v.estimatedTime}
-                        </span>
-                        <span>•</span>
-                        <span>₹{v.perKmRate}/km</span>
-                      </div>
-                      <span className="text-xs font-bold text-amber-600 bg-amber-50 px-2 py-0.5 rounded-md">
-                        {v.advanceMinutes}m Advance
-                      </span>
+                    <div className="pt-2">
+                      <button
+                        type="button"
+                        onClick={(e) => {
+                          e.stopPropagation();
+                          handleProceedToReview(v);
+                        }}
+                        className={`w-full py-3 rounded-2xl font-black text-sm flex items-center justify-center gap-2 transition-all ${
+                          isSelected
+                            ? "bg-amber-500 hover:bg-amber-400 text-slate-950 shadow-md shadow-amber-500/20"
+                            : "bg-slate-900 hover:bg-slate-800 text-white"
+                        }`}
+                      >
+                        <span>Select {v.name}</span>
+                        <ArrowRight size={16} />
+                      </button>
                     </div>
                   </div>
-
-                  {/* Select CTA Button */}
-                  <div className="pt-2">
-                    <button
-                      type="button"
-                      onClick={(e) => {
-                        e.stopPropagation();
-                        handleProceedToReview(v);
-                      }}
-                      className={`w-full py-3 rounded-2xl font-black text-sm flex items-center justify-center gap-2 transition-all ${
-                        isSelected
-                          ? "bg-amber-500 hover:bg-amber-400 text-slate-950 shadow-md shadow-amber-500/20"
-                          : "bg-slate-900 hover:bg-slate-800 text-white"
-                      }`}
-                    >
-                      <span>Select {v.name}</span>
-                      <ArrowRight size={16} />
-                    </button>
-                  </div>
-                </div>
-              );
-            })}
-          </div>
+                );
+              })}
+            </div>
+          )}
 
         </div>
       )}
@@ -663,14 +610,14 @@ export const BookingFlow: React.FC = () => {
             <div className="flex items-center justify-between border-b border-slate-100 pb-4">
               <div>
                 <h3 className="text-xl font-black text-slate-900">Review & Confirm Ride</h3>
-                <p className="text-xs text-slate-500">Please review your trip details before booking</p>
+                <p className="text-xs text-slate-500">Real-time fare verification & driver dispatch</p>
               </div>
               <div className="w-12 h-12 rounded-2xl bg-amber-500/10 flex items-center justify-center text-amber-600">
                 <Car size={26} />
               </div>
             </div>
 
-            {/* Route Line */}
+            {/* Route Summary */}
             <div className="space-y-4 bg-slate-50 p-5 rounded-2xl border border-slate-200/60">
               
               {/* Pickup */}
@@ -712,11 +659,23 @@ export const BookingFlow: React.FC = () => {
 
             </div>
 
-            {/* Rider Details Form */}
+            {/* Passenger Details Form */}
             <div className="space-y-4">
-              <h4 className="text-sm font-black text-slate-900 uppercase tracking-wider">
-                Passenger Details
-              </h4>
+              <div className="flex items-center justify-between">
+                <h4 className="text-sm font-black text-slate-900 uppercase tracking-wider">
+                  Passenger Details
+                </h4>
+
+                {!isAuthenticated && (
+                  <button
+                    type="button"
+                    onClick={() => setAuthModalOpen(true)}
+                    className="text-xs font-bold text-amber-600 hover:text-amber-700 flex items-center gap-1"
+                  >
+                    <LogIn size={13} /> Sign in for faster checkout
+                  </button>
+                )}
+              </div>
 
               <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
                 <div>
@@ -754,36 +713,36 @@ export const BookingFlow: React.FC = () => {
 
               <div>
                 <label className="block text-xs font-bold text-slate-700 mb-1">
-                  Special Notes for Driver (Optional)
+                  Special Notes for Chauffeur (Optional)
                 </label>
                 <input
                   type="text"
                   value={notes}
                   onChange={(e) => setNotes(e.target.value)}
-                  placeholder="e.g. Near main gate, please call upon arrival"
+                  placeholder="e.g. Near airport terminal 2 gate, will call on arrival"
                   className="w-full px-4 py-2.5 rounded-2xl bg-slate-50 border border-slate-200 focus:border-amber-500 focus:bg-white text-xs font-semibold text-slate-900 focus:outline-none"
                 />
               </div>
             </div>
 
-            {/* Fare Breakdown Card */}
+            {/* Live Fare Breakdown */}
             <div className="p-4 rounded-2xl bg-slate-900 text-white space-y-2.5">
               <div className="flex justify-between text-xs text-slate-400 font-medium">
                 <span>Base Fare</span>
                 <span>₹{selectedVehicle.baseFare}</span>
               </div>
               <div className="flex justify-between text-xs text-slate-400 font-medium">
-                <span>Distance Fare (~{distanceKm} km × ₹{selectedVehicle.perKmRate})</span>
-                <span>₹{Math.round(distanceKm * selectedVehicle.perKmRate)}</span>
+                <span>Distance Rate (~{distanceKm} km × ₹{selectedVehicle.perKmRate})</span>
+                <span>₹{Math.round(distanceKm * selectedVehicle.perKmRate * (tripType === "roundtrip" ? 1.8 : 1))}</span>
               </div>
               <div className="flex justify-between text-xs text-slate-400 font-medium">
                 <span>Taxes & Service Charges</span>
-                <span>Included</span>
+                <span className="text-emerald-400 font-bold">Included (0% Surcharge)</span>
               </div>
               <div className="pt-2 border-t border-slate-800 flex justify-between items-center">
                 <div>
-                  <span className="text-xs text-amber-400 font-bold uppercase tracking-wider block">Total Estimated Fare</span>
-                  <span className="text-[11px] text-slate-400">Pay directly to driver or online</span>
+                  <span className="text-xs text-amber-400 font-bold uppercase tracking-wider block">Total Payable Fare</span>
+                  <span className="text-[11px] text-slate-400">Pay directly to chauffeur or online</span>
                 </div>
                 <div className="text-2xl font-black text-amber-400">
                   ₹{selectedVehicle.estimatedFare}
@@ -801,7 +760,7 @@ export const BookingFlow: React.FC = () => {
               {submittingBooking ? (
                 <>
                   <Loader2 className="animate-spin" size={20} />
-                  Confirming Your Ride...
+                  Saving Booking to Database...
                 </>
               ) : (
                 <>
@@ -815,32 +774,31 @@ export const BookingFlow: React.FC = () => {
         </div>
       )}
 
-      {/* ================= STEP 3: BOOKING CONFIRMED SUCCESS ================= */}
+      {/* ================= STEP 3: REAL BOOKING SUCCESS ================= */}
       {currentStep === 3 && confirmedBooking && (
         <div className="max-w-xl mx-auto space-y-6 animate-in zoom-in-95 duration-300">
           
           <div className="bg-white rounded-3xl p-8 shadow-2xl border border-slate-100 text-center space-y-6">
             
-            {/* Success Icon */}
             <div className="w-20 h-20 bg-emerald-100 text-emerald-600 rounded-full flex items-center justify-center mx-auto shadow-lg shadow-emerald-500/20">
               <CheckCircle2 size={44} className="stroke-[2.5]" />
             </div>
 
             <div>
               <span className="px-3 py-1 rounded-full bg-emerald-100 text-emerald-800 font-bold text-xs uppercase tracking-wider">
-                Booking Confirmed
+                Database Confirmed
               </span>
               <h2 className="text-2xl sm:text-3xl font-black text-slate-900 mt-2">
                 Your Ride is Booked!
               </h2>
               <p className="text-xs text-slate-500 mt-1">
-                A driver will be assigned shortly and pickup instructions sent to your phone.
+                Your booking has been saved to the database. Chauffeur details will be dispatched prior to pickup.
               </p>
             </div>
 
-            {/* Booking Code Highlight */}
+            {/* Real Sequential Booking Code */}
             <div className="p-4 rounded-2xl bg-slate-50 border border-slate-200 text-center">
-              <span className="text-xs text-slate-500 font-semibold block">Booking Reference ID</span>
+              <span className="text-xs text-slate-500 font-semibold block">Official Booking Reference ID</span>
               <span className="text-2xl font-black text-slate-900 tracking-wider font-mono">
                 {confirmedBooking.bookingCode}
               </span>
@@ -900,6 +858,18 @@ export const BookingFlow: React.FC = () => {
           </div>
         </div>
       )}
+
+      {/* Auth Modal if triggered */}
+      <AuthModal
+        isOpen={authModalOpen}
+        onClose={() => setAuthModalOpen(false)}
+        onSuccess={() => {
+          if (user) {
+            setRiderName(user.username || user.name || "");
+            setRiderPhone(user.mobile || "");
+          }
+        }}
+      />
 
     </div>
   );

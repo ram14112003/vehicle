@@ -1,4 +1,4 @@
-import React from "react";
+import React, { useState, useEffect } from "react";
 import { Link, useNavigate } from "react-router-dom";
 import { 
   Car, 
@@ -10,59 +10,27 @@ import {
   Sparkles, 
   ChevronRight, 
   Users, 
-  Star 
+  Star,
+  Loader2
 } from "lucide-react";
-
+import axiosInstance from "../../utils/axiosInstance";
+import config from "../../config/config";
 import Navbar from "../Navigation/Navbar";
 import Footer from "../Navigation/Footer";
 import QuickBookingWidget from "../Booking/QuickBookingWidget";
 
-const VEHICLE_FLEET = [
-  {
-    name: "Sedan Prime",
-    category: "City & Business",
-    seats: 4,
-    luggage: "2 Bags",
-    startingFare: 250,
-    ratePerKm: 14,
-    description: "Dzire, Etios, or similar with comfortable AC seating and spacious trunk.",
-    image: "/images/step2.jpeg",
-    tag: "Most Popular"
-  },
-  {
-    name: "SUV / Innova",
-    category: "Family & Outstation",
-    seats: 6,
-    luggage: "4 Bags",
-    startingFare: 450,
-    ratePerKm: 19,
-    description: "Innova, Ertiga with premium comfort, extra legroom, and generous luggage capacity.",
-    image: "/images/step3.jpeg",
-    tag: "Extra Space"
-  },
-  {
-    name: "Mini / Hatchback",
-    category: "Daily Commute",
-    seats: 4,
-    luggage: "1 Bag",
-    startingFare: 180,
-    ratePerKm: 12,
-    description: "WagonR, Swift for fast, economical point-to-point city transfers.",
-    image: "/images/step1.jpeg",
-    tag: "Budget Friendly"
-  },
-  {
-    name: "Executive Luxury",
-    category: "Corporate VIP",
-    seats: 4,
-    luggage: "3 Bags",
-    startingFare: 800,
-    ratePerKm: 28,
-    description: "Camry, Mercedes with elite chauffeurs for corporate executives and VIP guests.",
-    image: "/images/GRACELOGO.jpg",
-    tag: "Premium VIP"
-  }
-];
+interface FleetCardItem {
+  id: string;
+  name: string;
+  category: string;
+  seats: number;
+  luggage: string;
+  startingFare: number;
+  ratePerKm: number;
+  description: string;
+  image: string;
+  tag: string;
+}
 
 const HOW_IT_WORKS_STEPS = [
   {
@@ -110,6 +78,93 @@ const WHY_CHOOSE_ITEMS = [
 
 export const HomePage: React.FC = () => {
   const navigate = useNavigate();
+  const [fleetList, setFleetList] = useState<FleetCardItem[]>([]);
+  const [loadingFleet, setLoadingFleet] = useState<boolean>(true);
+
+  useEffect(() => {
+    const loadFleet = async () => {
+      setLoadingFleet(true);
+      try {
+        const res = await axiosInstance.get("/vehicleType/vehicleTypeWithVehicles");
+        if (res.data?.success && Array.isArray(res.data.data)) {
+          const mapped: FleetCardItem[] = res.data.data.map((t: any, idx: number) => {
+            const seats = t.seatCapacity || 4;
+            const typeName = t.vehicleType || `Vehicle ${idx + 1}`;
+            const firstVeh = t.vehicles?.[0] || t.vehicle?.[0];
+            const BASE_URL = config.baseurl.apibaseurl || "http://localhost:5000";
+
+            let img = "/images/step2.jpeg";
+            if (t.vehicleImg && Array.isArray(t.vehicleImg) && t.vehicleImg.length > 0) {
+              const raw = t.vehicleImg[0];
+              img = raw.startsWith("http") || raw.startsWith("/images") ? raw : `${BASE_URL}/uploads/vehicleImg/${raw}`;
+            } else if (firstVeh?.vehicleImg) {
+              const rawImg = Array.isArray(firstVeh.vehicleImg) ? firstVeh.vehicleImg[0] : firstVeh.vehicleImg;
+              if (rawImg) {
+                img = rawImg.startsWith("http") || rawImg.startsWith("/images") ? rawImg : `${BASE_URL}/uploads/vehicleImg/${rawImg}`;
+              }
+            } else if (typeName.toLowerCase().includes("suv")) {
+              img = "/images/step3.jpeg";
+            } else if (typeName.toLowerCase().includes("hatch")) {
+              img = "/images/step1.jpeg";
+            }
+
+            let startRate = 250;
+            let kmRate = 14;
+            let tag = "Most Popular";
+            let cat = "City & Business";
+            let luggage = "2 Bags";
+
+            if (typeName.toLowerCase().includes("suv") || typeName.toLowerCase().includes("innova") || seats >= 6) {
+              startRate = 450;
+              kmRate = 19;
+              tag = "Extra Space";
+              cat = "Family & Outstation";
+              luggage = "4 Bags";
+            } else if (typeName.toLowerCase().includes("hatch") || typeName.toLowerCase().includes("mini")) {
+              startRate = 180;
+              kmRate = 12;
+              tag = "Budget Friendly";
+              cat = "Daily Commute";
+              luggage = "1 Bag";
+            } else if (typeName.toLowerCase().includes("luxury")) {
+              startRate = 800;
+              kmRate = 28;
+              tag = "Premium VIP";
+              cat = "Executive Luxury";
+              luggage = "3 Bags";
+            } else if (typeName.toLowerCase().includes("tempo") || seats >= 10) {
+              startRate = 1200;
+              kmRate = 24;
+              tag = "Group Travel";
+              cat = "Corporate & Group";
+              luggage = "8 Bags";
+            }
+
+            return {
+              id: t.vehicleTypeId,
+              name: typeName,
+              category: cat,
+              seats,
+              luggage,
+              startingFare: startRate,
+              ratePerKm: kmRate,
+              description: `${seats} sanitized seats with AC, GPS tracking & professional chauffeur.`,
+              image: img,
+              tag
+            };
+          });
+
+          setFleetList(mapped);
+        }
+      } catch (err) {
+        console.error("Error loading homepage fleet:", err);
+      } finally {
+        setLoadingFleet(false);
+      }
+    };
+
+    loadFleet();
+  }, []);
 
   return (
     <div className="min-h-screen bg-slate-50 flex flex-col justify-between">
@@ -177,62 +232,70 @@ export const HomePage: React.FC = () => {
           </p>
         </div>
 
-        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-6">
-          {VEHICLE_FLEET.map((fleet) => (
-            <div
-              key={fleet.name}
-              className="bg-white rounded-3xl p-6 shadow-lg hover:shadow-2xl border border-slate-100 transition-all hover:-translate-y-1 flex flex-col justify-between group"
-            >
-              <div>
-                <div className="flex items-center justify-between mb-3">
-                  <span className="text-[11px] font-bold text-amber-700 bg-amber-50 px-2.5 py-1 rounded-full border border-amber-200">
-                    {fleet.tag}
-                  </span>
-                  <span className="text-xs font-bold text-slate-400">
-                    ₹{fleet.ratePerKm}/km
-                  </span>
+        {loadingFleet ? (
+          <div className="py-16 text-center space-y-3 bg-white rounded-3xl border border-slate-100 shadow-md">
+            <Loader2 className="animate-spin text-amber-500 mx-auto" size={32} />
+            <p className="text-sm font-bold text-slate-600">Loading live fleet from database...</p>
+          </div>
+        ) : (
+          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-6">
+            {fleetList.map((fleet) => (
+              <div
+                key={fleet.name}
+                className="bg-white rounded-3xl p-6 shadow-lg hover:shadow-2xl border border-slate-100 transition-all hover:-translate-y-1 flex flex-col justify-between group"
+              >
+                <div>
+                  <div className="flex items-center justify-between mb-3">
+                    <span className="text-[11px] font-bold text-amber-700 bg-amber-50 px-2.5 py-1 rounded-full border border-amber-200">
+                      {fleet.tag}
+                    </span>
+                    <span className="text-xs font-bold text-slate-400">
+                      ₹{fleet.ratePerKm}/km
+                    </span>
+                  </div>
+
+                  <h3 className="text-xl font-black text-slate-900 group-hover:text-amber-600 transition-colors">
+                    {fleet.name}
+                  </h3>
+                  <p className="text-xs font-semibold text-slate-400 uppercase tracking-wider mt-0.5">
+                    {fleet.category}
+                  </p>
+
+                  <p className="text-xs text-slate-500 mt-3 line-clamp-2 leading-relaxed">
+                    {fleet.description}
+                  </p>
+
+                  <div className="flex items-center gap-4 py-3 my-4 border-y border-slate-100 text-xs font-bold text-slate-700">
+                    <span className="flex items-center gap-1">
+                      <Users size={14} className="text-amber-500" /> {fleet.seats} Seats
+                    </span>
+                    <span>•</span>
+                    <span>{fleet.luggage}</span>
+                  </div>
                 </div>
 
-                <h3 className="text-xl font-black text-slate-900 group-hover:text-amber-600 transition-colors">
-                  {fleet.name}
-                </h3>
-                <p className="text-xs font-semibold text-slate-400 uppercase tracking-wider mt-0.5">
-                  {fleet.category}
-                </p>
-
-                <p className="text-xs text-slate-500 mt-3 line-clamp-2 leading-relaxed">
-                  {fleet.description}
-                </p>
-
-                <div className="flex items-center gap-4 py-3 my-4 border-y border-slate-100 text-xs font-bold text-slate-700">
-                  <span className="flex items-center gap-1">
-                    <Users size={14} className="text-amber-500" /> {fleet.seats} Seats
-                  </span>
-                  <span>•</span>
-                  <span>{fleet.luggage}</span>
+                <div className="pt-2">
+                  <div className="flex items-baseline justify-between mb-3">
+                    <span className="text-xs font-medium text-slate-400">Fares from</span>
+                    <span className="text-lg font-black text-slate-900">₹{fleet.startingFare}</span>
+                  </div>
+                  <button
+                    type="button"
+                    onClick={() => navigate("/book")}
+                    className="w-full py-3 rounded-2xl bg-slate-900 hover:bg-amber-500 hover:text-slate-950 text-white font-bold text-xs transition-colors flex items-center justify-center gap-1.5"
+                  >
+                    <span>Book {fleet.name}</span>
+                    <ChevronRight size={14} />
+                  </button>
                 </div>
               </div>
-
-              <div className="pt-2">
-                <div className="flex items-baseline justify-between mb-3">
-                  <span className="text-xs font-medium text-slate-400">Fares from</span>
-                  <span className="text-lg font-black text-slate-900">₹{fleet.startingFare}</span>
-                </div>
-                <button
-                  type="button"
-                  onClick={() => navigate("/book")}
-                  className="w-full py-3 rounded-2xl bg-slate-900 hover:bg-amber-500 hover:text-slate-950 text-white font-bold text-xs transition-colors flex items-center justify-center gap-1.5"
-                >
-                  <span>Book {fleet.name}</span>
-                  <ChevronRight size={14} />
-                </button>
-              </div>
-            </div>
-          ))}
-        </div>
+            ))}
+          </div>
+        )}
       </section>
 
       {/* ================= HOW IT WORKS (3 SIMPLE STEPS) ================= */}
+
       <section className="bg-slate-900 text-white py-20 px-4 sm:px-6 lg:px-8">
         <div className="max-w-7xl mx-auto">
           

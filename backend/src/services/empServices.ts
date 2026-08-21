@@ -21,11 +21,11 @@ import { sendNotification } from "../utils/sendNotification";
 import { sendEmailFromTemplate } from "../services/emailConfServices";
 import { fetchAllEmailConfs } from "../services/emailConfServices";
 import config from '../config/config';
-import { sendTransactionalSms } from './smsServices';
-import {normalizeManagerEmails } from '../utils/email';
+import { normalizeManagerEmails } from '../utils/email';
 import { sendSmsNotifications } from '../utils/smsNotifications';
-
+import { Security } from '../utils/Security';
 import crypto from "crypto";
+
 
 
 
@@ -103,14 +103,34 @@ export const createBookingForWeb = async (req: any, res: Response) => {
       return res.status(403).json({ message: "Not able to authorize" });
     }
 
-    // Check user active/inactive
-    const user = await User.findOne({ where: { userId: userId } });
-    if (user?.status === USER_STATUS.INACTIVE) {
+    let finalUserId = userId || loggedInId;
+
+    if (!finalUserId && (behalfOfPhone || behalfOfName)) {
+      const phone = behalfOfPhone || "0000000000";
+      let guestUser = await User.findOne({ where: { mobile: phone } });
+      if (!guestUser) {
+        const dummyPassword = await Security.hash("123456", 10);
+        guestUser = await User.create({
+          username: behalfOfName || "Rider",
+          mobile: phone,
+          email: `${phone.replace(/\D/g, "")}@gracecabs.com`,
+          password: dummyPassword,
+          role: "user",
+          status: "active",
+          isConfirmed: true
+        });
+      }
+      finalUserId = guestUser.userId;
+    }
+
+    // Check user active/inactive if user exists
+    const user = finalUserId ? await User.findOne({ where: { userId: finalUserId } }) : null;
+    if (user && user.status === USER_STATUS.INACTIVE) {
       return res.status(403).json({ message: "User not active" });
     }
 
     // ✅ Fix: Decide who created this booking
-    let createdBy = loggedInId;
+    let createdBy = loggedInId || finalUserId;
     let employeeId = null;
 
     if (req.role === ROLES.EMPLOYEE) {
@@ -125,7 +145,7 @@ export const createBookingForWeb = async (req: any, res: Response) => {
     const bookingStatus = STATUS.PENDING;
     const driverTripStatus = STATUS.PENDING;
     const autoApproveStatus = STATUS.PENDING;    
-    const company = await Company.findByPk(user?.companyId);
+    const company = user?.companyId ? await Company.findByPk(user.companyId) : null;
 
     // Derive booking time if not given
     let finalBookingTime = bookingTime;
@@ -134,15 +154,16 @@ export const createBookingForWeb = async (req: any, res: Response) => {
       finalBookingTime = timePart.substring(0, 8);
     }
 
-    
     // ✅ Create booking properly
     const booking = await Booking.create({
       bookingDate,
       bookingTime: finalBookingTime,
       employeeId, // can be null for user
       pickupPoint,
-      pickupCity,
+      pickupCity: pickupCity || "Chennai",
       dropPoint,
+      userId: finalUserId,
+
       travellersCount,
       femaleCount,
       maleCount,
@@ -160,12 +181,14 @@ export const createBookingForWeb = async (req: any, res: Response) => {
       flightNo,
       trainNo,
       notes,
-      pickupLongitude,
       pickupLatitude,
+      pickupLongitude,
       dropLatitude,
       dropLongitude,
-      userId,
       bookingCreatedBy,
+
+
+
         behalfOfName,
         behalfOfPhone,
       autoApproveStatus,

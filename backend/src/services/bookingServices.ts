@@ -593,11 +593,8 @@ export const editCloseBooking = async (req: any, res: Response) => {
 export const cancelBooking = async (req: any, res: Response) => {
   try {
     const role = req.role;
+    const userId = req.userId;
     const { bookingId, remarks } = req.body;
-
-    if (role === ROLES.USER) {
-      return res.status(403).json({ message: "Not Authorized" });
-    }
 
     // Get booking with user
     const booking = await Booking.findByPk(bookingId, {
@@ -608,11 +605,16 @@ export const cancelBooking = async (req: any, res: Response) => {
       return res.status(404).json({ message: "Booking not found" });
     }
 
+    if (role === ROLES.USER && booking.userId !== userId && userId) {
+      return res.status(403).json({ message: "Not Authorized to cancel this booking" });
+    }
+
     // Update booking + related records
     const [affected] = await Booking.update(
-      { confirmStatus: ORDER.STATUS.CANCELLED, remarks },
+      { confirmStatus: ORDER.STATUS.CANCELLED, remarks: remarks || "Cancelled by user" },
       { where: { bookingId } }
     );
+
 
     if (booking.paymentId) {
       await Payment.update(
@@ -3612,7 +3614,10 @@ export const getAllOrdersByUser = async (req: Request, res: Response) => {
     const orders = await Booking.findAll({
       where: { userId },
       include: [
-        { model: Invoice, include: [{ model: Payment }, { model: ClosePending }] }
+        { model: VehicleType, as: "vehicleType", required: false },
+        { model: Vehicle, as: "vehicle", required: false },
+        { model: Drivers, as: "driver", required: false },
+        { model: Invoice, required: false, include: [{ model: Payment, required: false }, { model: ClosePending, required: false }] }
       ],
       order: [["createdAt", "DESC"]],
     });
@@ -3623,6 +3628,7 @@ export const getAllOrdersByUser = async (req: Request, res: Response) => {
     res.status(500).json({ success: false, message: "Server Error" });
   }
 };
+
 
 // 🟡 Get Pending Orders
 export const getPendingOrdersByUser = async (req: Request, res: Response) => {

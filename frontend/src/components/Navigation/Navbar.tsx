@@ -12,6 +12,8 @@ import {
   ChevronDown, 
   ShieldCheck 
 } from "lucide-react";
+import { useAuth } from "../../context/AuthContext";
+import AuthModal from "../Auth/AuthModal";
 
 interface NavbarProps {
   transparent?: boolean;
@@ -21,15 +23,15 @@ export const Navbar: React.FC<NavbarProps> = ({ transparent = false }) => {
   const [isScrolled, setIsScrolled] = useState(false);
   const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
   const [userDropdownOpen, setUserDropdownOpen] = useState(false);
+  const [authModalOpen, setAuthModalOpen] = useState(false);
+  const [authDefaultTab, setAuthDefaultTab] = useState<"signin" | "signup">("signin");
   
   const navigate = useNavigate();
   const location = useLocation();
+  const { user, isAuthenticated, logout } = useAuth();
 
-  const token = localStorage.getItem("token") || localStorage.getItem("accessToken");
-  const username = localStorage.getItem("username") || "Account";
-  const role = localStorage.getItem("role") || "";
-
-  const isLoggedIn = !!token;
+  const displayName = user?.username || user?.name || localStorage.getItem("username") || "User";
+  const role = user?.role || localStorage.getItem("role") || "";
 
   useEffect(() => {
     const handleScroll = () => {
@@ -40,11 +42,18 @@ export const Navbar: React.FC<NavbarProps> = ({ transparent = false }) => {
   }, []);
 
   const handleLogout = () => {
-    localStorage.clear();
+    logout();
     setUserDropdownOpen(false);
     setMobileMenuOpen(false);
     navigate("/");
   };
+
+  const openSignIn = () => {
+    setAuthDefaultTab("signin");
+    setAuthModalOpen(true);
+    setMobileMenuOpen(false);
+  };
+
 
   const isActive = (path: string) => {
     if (path === "/" && location.pathname === "/") return true;
@@ -70,14 +79,17 @@ export const Navbar: React.FC<NavbarProps> = ({ transparent = false }) => {
           <span className="hidden md:inline-flex items-center gap-1 text-emerald-400 font-medium">
             <ShieldCheck size={13} /> 24/7 Verified Chauffeurs & Corporate Cabs
           </span>
-          {isLoggedIn ? (
+          {isAuthenticated ? (
             <span className="text-slate-400">
-              Welcome, <strong className="text-white font-semibold">{username}</strong>
+              Welcome, <strong className="text-white font-semibold">{displayName}</strong>
             </span>
           ) : (
-            <Link to="/adminlogin" className="hover:text-amber-400 transition-colors font-medium">
-              Staff / Corporate Login →
-            </Link>
+            <button 
+              onClick={openSignIn}
+              className="hover:text-amber-400 transition-colors font-medium text-slate-300"
+            >
+              Sign In / Register →
+            </button>
           )}
         </div>
       </div>
@@ -159,16 +171,16 @@ export const Navbar: React.FC<NavbarProps> = ({ transparent = false }) => {
 
           {/* Desktop Right CTA / User Profile */}
           <div className="hidden md:flex items-center gap-3">
-            {isLoggedIn ? (
+            {isAuthenticated ? (
               <div className="relative">
                 <button
                   onClick={() => setUserDropdownOpen(!userDropdownOpen)}
                   className="flex items-center gap-2 px-3.5 py-2 rounded-xl bg-slate-100 hover:bg-slate-200/80 text-slate-800 text-sm font-semibold transition-colors"
                 >
                   <div className="w-7 h-7 rounded-full bg-amber-500 text-slate-950 font-bold flex items-center justify-center text-xs shadow-sm">
-                    {username.charAt(0).toUpperCase()}
+                    {displayName.charAt(0).toUpperCase()}
                   </div>
-                  <span className="max-w-[120px] truncate">{username}</span>
+                  <span className="max-w-[120px] truncate">{displayName}</span>
                   <ChevronDown size={16} className={`text-slate-500 transition-transform ${userDropdownOpen ? 'rotate-180' : ''}`} />
                 </button>
 
@@ -179,7 +191,7 @@ export const Navbar: React.FC<NavbarProps> = ({ transparent = false }) => {
                   >
                     <div className="px-4 py-2 border-b border-slate-100">
                       <p className="text-xs text-slate-500 font-medium">Signed in as</p>
-                      <p className="text-sm font-bold text-slate-900 truncate">{username}</p>
+                      <p className="text-sm font-bold text-slate-900 truncate">{displayName}</p>
                       <span className="inline-block mt-1 px-2 py-0.5 bg-slate-100 text-slate-600 rounded text-[10px] uppercase font-bold tracking-wider">
                         {role || "User"}
                       </span>
@@ -213,12 +225,13 @@ export const Navbar: React.FC<NavbarProps> = ({ transparent = false }) => {
                 )}
               </div>
             ) : (
-              <Link
-                to="/adminlogin"
+              <button
+                type="button"
+                onClick={openSignIn}
                 className="px-4 py-2 rounded-xl text-sm font-bold text-slate-700 hover:text-slate-950 hover:bg-slate-100 transition-colors"
               >
                 Sign In
-              </Link>
+              </button>
             )}
 
             <Link
@@ -288,10 +301,10 @@ export const Navbar: React.FC<NavbarProps> = ({ transparent = false }) => {
             </a>
 
             <div className="pt-3 border-t border-slate-100">
-              {isLoggedIn ? (
+              {isAuthenticated ? (
                 <div className="space-y-2">
                   <div className="px-3 py-1.5 text-xs text-slate-500 font-medium">
-                    Signed in as <strong className="text-slate-900">{username}</strong>
+                    Signed in as <strong className="text-slate-900">{displayName}</strong>
                   </div>
                   {role === "superadmin" && (
                     <Link
@@ -311,13 +324,13 @@ export const Navbar: React.FC<NavbarProps> = ({ transparent = false }) => {
                 </div>
               ) : (
                 <div className="grid grid-cols-2 gap-2 pt-2">
-                  <Link
-                    to="/adminlogin"
-                    onClick={() => setMobileMenuOpen(false)}
+                  <button
+                    type="button"
+                    onClick={openSignIn}
                     className="w-full text-center px-4 py-2.5 rounded-xl border border-slate-300 text-slate-800 font-bold text-sm hover:bg-slate-50"
                   >
                     Sign In
-                  </Link>
+                  </button>
                   <Link
                     to="/book"
                     onClick={() => setMobileMenuOpen(false)}
@@ -331,8 +344,17 @@ export const Navbar: React.FC<NavbarProps> = ({ transparent = false }) => {
           </div>
         )}
       </header>
+
+      {/* Auth Modal */}
+      <AuthModal
+        isOpen={authModalOpen}
+        onClose={() => setAuthModalOpen(false)}
+        defaultTab={authDefaultTab}
+      />
     </>
   );
 };
 
 export default Navbar;
+
+

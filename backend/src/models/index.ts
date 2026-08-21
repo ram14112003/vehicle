@@ -31,16 +31,19 @@ import { OnCallInvoice } from './onCallInvoice';
 import { OnCallInvoiceItems } from './onCallInvoiceItems';
 import { MonthlyInvoice } from './monthlyInvoice';
 import { MonthlyInvoiceItems } from './monthlyInvoiceItems';
+import { seedInitialVehicles } from '../seeders/seedVehicles';
+
 const connectDB = async () => {
   try {
     await sequelize.authenticate();
     await sequelize.sync({ alter: true });
-  //  await sequelize.sync();
     console.log('Database connected and tables synced.');
+    await seedInitialVehicles();
   } catch (error) {
     console.error('DB connection error:', error);
   }
 };
+
 
 export { sequelize, connectDB, Employee, Company, Drivers,Vehicle,Vendor,User, Booking, Invoice, EmailConfiguration,
   VehicleType, Tax, Pickuparea, Pickupcity, VehicleMaster,OTP,PaymentMode,Payment,orderSummery,Package,PackageData,Configuration,

@@ -278,6 +278,7 @@ export const registerUser = async (req: Request, res: Response) => {
       username,
       email,
       mobile,
+      password,
       role,
       gender,
       country,
@@ -288,184 +289,235 @@ export const registerUser = async (req: Request, res: Response) => {
       state,
       pinCode,
       isManager,
-     danfossuserId,
- managerId,
- managerEmail, 
- costCenter
+      danfossuserId,
+      managerId,
+      managerEmail,
+      costCenter
     } = req.body;
 
-    const normalizedEmail = String(email || "").trim().toLowerCase();
-
-    const existingUserByEmail = await User.findOne({ where: { email: normalizedEmail } });
-    if (existingUserByEmail) {
+    if (!username || (!email && !mobile)) {
       return res.status(400).json({
         success: false,
-        message: "User with this email already exists"
-      });
-    }
-const existingUserByMobile = await User.findOne({ where: { mobile } });
-
-if (existingUserByMobile) {
-  return res.status(400).json({
-    success: false,
-    message: "Phone number already exists"
-  });
-}
-    const company = await Company.findByPk(companyId, {
-      attributes: ["companyId", "companyName", "managerEmail"]
-    });
-
-    if (!company) {
-      return res.status(400).json({
-        success: false,
-        message: "Company not found with the provided companyId"
+        message: "Name and Email or Mobile number are required"
       });
     }
 
-    const isDanfoss = company.companyName?.toLowerCase().includes("danfoss");
+    const normalizedEmail = email ? String(email).trim().toLowerCase() : null;
 
-    if (isDanfoss) {
-      if (!normalizedEmail.endsWith("@danfoss.com")) {
+    if (normalizedEmail) {
+      const existingUserByEmail = await User.findOne({ where: { email: normalizedEmail } });
+      if (existingUserByEmail) {
         return res.status(400).json({
           success: false,
-          message: "For Danfoss company, email must be @danfoss.com only."
+          message: "User with this email already exists"
         });
       }
     }
 
-    const managerEmails: string[] = normalizeManagerEmails(company.managerEmail as any);
-    let isCompanyManager = managerEmails.includes(normalizedEmail);
-    if(isManager) {
-      isCompanyManager = isManager;
+    if (mobile) {
+      const existingUserByMobile = await User.findOne({ where: { mobile: String(mobile).trim() } });
+      if (existingUserByMobile) {
+        return res.status(400).json({
+          success: false,
+          message: "User with this phone number already exists"
+        });
+      }
     }
-    console.log("ismanager: ",isManager," iscompmanager: ", isCompanyManager)
-    // ✅ Auto-generate 6 digit password
-    const generatedPassword = Math.floor(100000 + Math.random() * 900000).toString();
 
-    // ✅ Hash the generated password before storing in DB
-    const hashedPassword = await Security.hash(generatedPassword, 10);
+    let isCompanyManager = false;
+    let validatedCompanyId: string | null = null;
+
+    if (companyId) {
+      const company = await Company.findByPk(companyId, {
+        attributes: ["companyId", "companyName", "managerEmail"]
+      });
+
+      if (company) {
+        validatedCompanyId = company.companyId;
+        const isDanfoss = company.companyName?.toLowerCase().includes("danfoss");
+        if (isDanfoss && normalizedEmail && !normalizedEmail.endsWith("@danfoss.com")) {
+          return res.status(400).json({
+            success: false,
+            message: "For Danfoss company, email must be @danfoss.com only."
+          });
+        }
+
+        const managerEmails: string[] = normalizeManagerEmails(company.managerEmail as any);
+        isCompanyManager = normalizedEmail ? managerEmails.includes(normalizedEmail) : false;
+        if (isManager) {
+          isCompanyManager = true;
+        }
+      }
+    }
+
+    // Password: hash user-provided password or generate one
+    const plainPassword = password ? String(password).trim() : Math.floor(100000 + Math.random() * 900000).toString();
+    const hashedPassword = await Security.hash(plainPassword, 10);
 
     const newUser = await User.create({
-      username,
-      email: normalizedEmail,
-      mobile,
+      username: username.trim(),
+      email: normalizedEmail || `${mobile}@gracecabs.com`,
+      mobile: mobile ? String(mobile).trim() : "0000000000",
       password: hashedPassword,
       role: role || "user",
-      gender,
-      country,
-      city,
-      companyId,
+      gender: gender || null,
+      country: country || "India",
+      city: city || "Chennai",
+      companyId: validatedCompanyId,
       status: "active",
       isPayHolder: false,
-      isConfirmed: 1,
-      userAddress,
+      isConfirmed: true,
+      userAddress: userAddress || null,
       presentAddress: presentAddress || null,
       companyManager: isCompanyManager ? 1 : 0,
-      isManager,
-      state,
-      pinCode,
-         danfossuserId: danfossuserId || null,
-  managerId: managerId || null,
-  managerEmail: managerEmail || null,
-  costCenter
-
+      isManager: !!isManager,
+      state: state || "Tamil Nadu",
+      pinCode: pinCode || null,
+      danfossuserId: danfossuserId || null,
+      managerId: managerId || null,
+      managerEmail: managerEmail || null,
+      costCenter: costCenter || null
     });
 
     const createdUser = await User.findByPk(newUser.userId, {
-      include: [{ model: Company, attributes: ["companyId", "companyName"] }],
+      include: validatedCompanyId ? [{ model: Company, attributes: ["companyId", "companyName"] }] : [],
+      attributes: { exclude: ["password"] }
     });
 
-    try {
-      await sendEmailFromTemplate("USER_REGISTRATION_EMAIL_TO_USER", {
-        UserName: username,
-        UserEmail: normalizedEmail,
-        Password: generatedPassword,
-      });
-      console.log("✅ Registration email sent to:", normalizedEmail);
-    } catch (emailErr) {
-      console.error("❌ Error sending registration email:", emailErr);
+    if (normalizedEmail) {
+      try {
+        await sendEmailFromTemplate("USER_REGISTRATION_EMAIL_TO_USER", {
+          UserName: username,
+          UserEmail: normalizedEmail,
+          Password: plainPassword,
+        });
+      } catch (emailErr) {
+        console.warn("Registration email notification skipped:", emailErr);
+      }
     }
+
+    // Generate JWT token so user is instantly authenticated
+    const accessToken = Security.generateJwtToken(
+      {
+        userId: newUser.userId,
+        roles: newUser.role,
+        companyId: newUser.companyId
+      },
+      config.security.jwtSecret,
+      config.security.accessTokenExpiry
+    );
 
     return res.status(201).json({
       success: true,
-      message: "User registered successfully and password sent to email",
-      User: createdUser,
+      message: "User registered successfully",
+      User: createdUser || newUser,
+      accessToken
     });
 
   } catch (error: any) {
     console.error("Register user error:", error);
     return res.status(400).json({
       success: false,
-      message: "User with this Ph_no already exists",
+      message: error.message || "Failed to register user",
       error: error.message,
     });
   }
 };
 
 export const userLogin = async (req: Request, res: Response) => {
-  const { email, password } = req.body;
+  const { email, password, username, mobile, login } = req.body;
+  const identifier = email || username || mobile || login;
   
   try {
-    // Validate input
-    if (!email || !password) {
+    if (!identifier || !password) {
       res.status(400).json({ 
-        success: false,
-        message: 'Email and password are required' 
+        success: false, 
+        message: 'Email/Phone and password are required' 
       });
       return;
     }
 
-    // Find user by email
-    const user = await User.findOne({ where: { email } });
+    const cleanIdentifier = String(identifier).trim();
+    const cleanEmail = cleanIdentifier.toLowerCase();
+
+    // Find user by email OR mobile
+    const user = await User.findOne({
+      where: {
+        [Op.or]: [
+          { email: cleanEmail },
+          { mobile: cleanIdentifier },
+          { username: cleanIdentifier }
+        ]
+      }
+    });
     
     if (!user) {
       res.status(404).json({ 
-        success: false,
-        message: 'User not found' 
+        success: false, 
+        message: 'Invalid email or password' 
       });
       return;
     }
 
-    // Check if user has a password (in case it's null)
     if (!user.password) {
-      res.status(500).json({ 
-        success: false,
-        message: 'User password not found in database' 
+      res.status(401).json({ 
+        success: false, 
+        message: 'User password not set. Please reset password.' 
       });
       return;
     }
 
     // Compare password
-    const isMatch = await bcrypt.compare(password, user.password);
+    const isMatch = await bcrypt.compare(String(password).trim(), user.password);
     if (!isMatch) {
       res.status(401).json({ 
-        success: false,
-        message: 'Invalid credentials' 
+        success: false, 
+        message: 'Invalid email or password' 
       });
       return;
     }
+
+    // Determine role
+    const userRole = user.companyManager ? "manager" : (user.role || "user");
 
     // Generate JWT token
     const accessToken = Security.generateJwtToken(
       { 
         userId: user.userId,
-        roles: user.role
+        roles: userRole,
+        companyId: user.companyId
       },
       config.security.jwtSecret,
       config.security.accessTokenExpiry
     );
 
+    const safeUser = {
+      userId: user.userId,
+      id: user.userId,
+      username: user.username,
+      name: user.username,
+      email: user.email,
+      mobile: user.mobile,
+      role: userRole,
+      companyId: user.companyId
+    };
+
     res.status(200).json({
       success: true,
       message: 'Login successful',
-      User: user,
+      User: safeUser,
+      user: safeUser,
+      id: user.userId,
+      name: user.username,
+      email: user.email,
+      role: userRole,
       accessToken
     });
 
   } catch (err: any) {
     console.error('User login error:', err);
     res.status(500).json({ 
-      success: false,
+      success: false, 
       message: 'Internal server error',
       error: err.message 
     });

@@ -1,20 +1,31 @@
 import express from 'express';
-import {getAllVehicleTypes,getVehicleTypeById,updateVehicleType,deleteVehicleType,restoreVehicleType,getAllVehicleTypesforWeb,getVehicleTypeWithVehicles,getAllVehicleTypeByType } from '../services/vehicleTypeServices';
+import {
+  getAllVehicleTypes,
+  getVehicleTypeById,
+  updateVehicleType,
+  deleteVehicleType,
+  restoreVehicleType,
+  getAllVehicleTypesforWeb,
+  getVehicleTypeWithVehicles,
+  getAllVehicleTypeByType,
+  calculateFare
+} from '../services/vehicleTypeServices';
 import { authMiddleware } from '../middleware/authMiddleware';
-
 import { uploadVehicleImg } from "../middleware/uploadConfig";
-const  router = express.Router();
 
-// Protected routes (authentication required)
+const router = express.Router();
 
-router.get('/getAllVehicleType',getAllVehicleTypes );
-router.get('/getAllVehicleTypeByType',authMiddleware,getAllVehicleTypeByType );
-router.get('/getAllVehicleTypesforWeb',authMiddleware,getAllVehicleTypesforWeb);
-router.get("/vehicleTypeWithVehicles",authMiddleware,getVehicleTypeWithVehicles);
-router.get('/:id',authMiddleware,getVehicleTypeById );
-router.put('/:id/update',authMiddleware, uploadVehicleImg.array("vehicleImg", 5),updateVehicleType);
+// Public fleet & fare routes
+router.get('/getAllVehicleType', getAllVehicleTypes);
+router.get('/getAllVehicleTypesforWeb', getAllVehicleTypesforWeb);
+router.get("/vehicleTypeWithVehicles", getVehicleTypeWithVehicles);
+router.post('/calculate-fare', calculateFare);
 
-router.delete('/:id/delete',authMiddleware,deleteVehicleType)
+// Protected vehicle routes
+router.get('/getAllVehicleTypeByType', authMiddleware, getAllVehicleTypeByType);
+router.get('/:id', authMiddleware, getVehicleTypeById);
+router.put('/:id/update', authMiddleware, uploadVehicleImg.array("vehicleImg", 5), updateVehicleType);
+router.delete('/:id/delete', authMiddleware, deleteVehicleType);
 router.patch('/:id/restore', authMiddleware, restoreVehicleType);
 
-export default router;
+export default router;

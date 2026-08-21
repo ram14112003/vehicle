@@ -8,8 +8,11 @@ const router = express.Router();
 router.post('/empRegister', empRegister);
 router.post('/empLogin', empLogin);
 router.post('/createUser', registerUser); 
-router.post('/userLogin',userLogin)
-router.post('/companyLogin', CompanyLogin)
+router.post('/signup', registerUser);
+router.post('/userLogin', userLogin);
+router.post('/login', userLogin);
+router.post('/companyLogin', CompanyLogin);
+
 
 router.post('/vendorLogin', vendorLogin);
 

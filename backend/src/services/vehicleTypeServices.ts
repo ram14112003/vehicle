@@ -530,3 +530,66 @@ export const getAllVehicleTypeByType = async (req: Request, res: Response) => {
     return res.status(500).json({ message: "Failed to fetch vehicle types", error });
   }
 };
+
+export const calculateFare = async (req: Request, res: Response) => {
+  try {
+    const { vehicleTypeId, distanceKm = 20, tripType = "oneway" } = req.body;
+
+    let vType = null;
+    if (vehicleTypeId) {
+      vType = await VehicleType.findByPk(vehicleTypeId, {
+        include: [{ model: Vehicle, required: false }]
+      });
+    }
+
+    const seats = vType?.seatCapacity || 4;
+    const typeName = vType?.vehicleType?.toLowerCase() || "";
+
+    let baseFare = 250;
+    let perKmRate = 14;
+
+    if (typeName.includes("suv") || typeName.includes("innova") || seats >= 6) {
+      baseFare = 450;
+      perKmRate = 19;
+    } else if (typeName.includes("hatch") || typeName.includes("mini")) {
+      baseFare = 180;
+      perKmRate = 12;
+    } else if (typeName.includes("luxury") || typeName.includes("camry") || typeName.includes("mercedes")) {
+      baseFare = 800;
+      perKmRate = 28;
+    } else if (typeName.includes("tempo") || seats >= 10) {
+      baseFare = 1200;
+      perKmRate = 24;
+    }
+
+    const dist = Math.max(Number(distanceKm) || 10, 1);
+    const tripMultiplier = tripType === "roundtrip" ? 1.8 : 1.0;
+    const distanceFare = Math.round(dist * perKmRate * tripMultiplier);
+    const totalFare = Math.round(baseFare + distanceFare);
+
+    return res.status(200).json({
+      success: true,
+      message: "Fare calculated successfully",
+      data: {
+        vehicleTypeId: vType?.vehicleTypeId || vehicleTypeId,
+        vehicleTypeName: vType?.vehicleType || "Cab",
+        seats,
+        distanceKm: dist,
+        tripType,
+        baseFare,
+        perKmRate,
+        distanceFare,
+        taxesIncluded: true,
+        totalFare,
+        estimatedTimeMinutes: Math.round(dist * 1.8)
+      }
+    });
+  } catch (error: any) {
+    console.error("Calculate Fare Error:", error);
+    return res.status(500).json({
+      success: false,
+      message: "Failed to calculate fare",
+      error: error.message
+    });
+  }
+};

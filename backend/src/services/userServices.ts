@@ -1,7 +1,9 @@
 import { Request, Response } from 'express';
 import { User } from '../models/user';
 import { Company } from '../models/company';
-import { Op } from 'sequelize';                    
+import { Booking } from '../models/booking';
+import { Op } from 'sequelize';
+                    
 import { sendEmailFromTemplate } from "../services/emailConfServices"; 
 import { MapCount } from '../models/mapCount';
 import XLSX from "xlsx";
@@ -10,9 +12,24 @@ import { v4 as uuidv4 } from "uuid";
 
 export const getAllUsers = async (req: Request, res: Response) => {
   try {
-    const { includeDeleted } = req.query;
+    const { includeDeleted, search } = req.query;
+
+    let whereClause: any = {};
+    if (includeDeleted !== "1") {
+      whereClause.isDeleted = false;
+    }
+
+    if (search && String(search).trim() !== "") {
+      const term = `%${String(search).trim()}%`;
+      whereClause[Op.or] = [
+        { username: { [Op.like]: term } },
+        { email: { [Op.like]: term } },
+        { mobile: { [Op.like]: term } }
+      ];
+    }
 
     const query: any = {
+      where: whereClause,
       include: [
         {
           model: Company,
@@ -20,11 +37,15 @@ export const getAllUsers = async (req: Request, res: Response) => {
           required: false,
           attributes: ["companyId", "companyName"],
         },
+        {
+          model: Booking,
+          as: "bookings",
+          required: false,
+          attributes: ["bookingId", "confirmStatus", "finalFare"],
+        }
       ],
-    };[ 
-       
-      
-    ]
+      order: [["createdAt", "DESC"]]
+    };
 
     const users =
       includeDeleted === "1"
@@ -44,6 +65,7 @@ export const getAllUsers = async (req: Request, res: Response) => {
     });
   }
 };
+
 export const getAllUserByCompany = async (req: Request, res: Response) => {
   try {
     const { companyId } = req.params;

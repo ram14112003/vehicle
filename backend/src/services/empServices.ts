@@ -149,44 +149,72 @@ export const createBookingForWeb = async (req: any, res: Response) => {
     const autoApproveStatus = STATUS.PENDING;    
     const company = user?.companyId ? await Company.findByPk(user.companyId) : null;
 
-    // Authoritative distance calculation
-    let calculatedDist = Number(req.body.distanceKm);
-    if (!calculatedDist || isNaN(calculatedDist) || calculatedDist <= 0) {
-      const route = await calculateRouteDistance(pickupPoint, dropPoint);
-      calculatedDist = route.distanceKm;
-    }
-    calculatedDist = Math.max(calculatedDist, 1);
-
-    // Authoritative VehicleType & rates calculation
+    // 1. Resolve VehicleType & its dynamic pricing strictly from Database
     let vType = null;
     if (vehicleTypeId) {
-      vType = await VehicleType.findByPk(vehicleTypeId);
+      vType = await VehicleType.findOne({
+        where: { vehicleTypeId: vehicleTypeId, isDeleted: false }
+      });
     }
 
-    const typeName = vType?.vehicleType?.toLowerCase() || (preferredType || "").toLowerCase();
-    const seats = vType?.seatCapacity || (typeName.includes("suv") ? 6 : 4);
-
-    let baseRate = vType?.baseFare || 250;
-    let kmRate = vType?.perKmRate || 14;
-
-    if (!vType?.baseFare || !vType?.perKmRate) {
-      if (typeName.includes("suv") || typeName.includes("innova") || seats >= 6) {
-        baseRate = 450;
-        kmRate = 19;
-      } else if (typeName.includes("hatch") || typeName.includes("mini")) {
-        baseRate = 180;
-        kmRate = 12;
-      } else if (typeName.includes("luxury") || typeName.includes("camry") || typeName.includes("mercedes")) {
-        baseRate = 800;
-        kmRate = 28;
-      } else if (typeName.includes("tempo") || seats >= 10) {
-        baseRate = 1200;
-        kmRate = 24;
+    if (!vType && vehicleId) {
+      const veh = await Vehicle.findByPk(vehicleId);
+      if (veh?.vehicleTypeId) {
+        vType = await VehicleType.findOne({
+          where: { vehicleTypeId: veh.vehicleTypeId, isDeleted: false }
+        });
       }
     }
 
-    const tripMultiplier = roundTrip === "Yes" || roundTrip === "roundtrip" ? 1.8 : 1.0;
-    const finalFareAmount = Math.round(baseRate + (calculatedDist * kmRate * tripMultiplier));
+    if (!vType && preferredType) {
+      vType = await VehicleType.findOne({
+        where: { vehicleType: preferredType, isDeleted: false }
+      });
+    }
+
+    if (!vType) {
+      return res.status(400).json({
+        success: false,
+        message: "Selected vehicle category was not found. Please choose an active vehicle."
+      });
+    }
+
+    // Validate that DB pricing exists for this vehicle
+    const dbBaseFare = Number(vType.baseFare);
+    const dbPerKmRate = Number(vType.perKmRate);
+
+    if (isNaN(dbBaseFare) || dbBaseFare <= 0 || isNaN(dbPerKmRate) || dbPerKmRate <= 0) {
+      return res.status(400).json({
+        success: false,
+        message: `Pricing is not configured for ${vType.vehicleType}. Please contact the administrator.`
+      });
+    }
+
+    // 2. Validate and compute accurate route distance
+    let rawDist = typeof req.body.distanceKm === "number" ? req.body.distanceKm : parseFloat(String(req.body.distanceKm || "").replace(/[^0-9.]/g, ""));
+    let calculatedDist = !isNaN(rawDist) && rawDist > 0 ? rawDist : 0;
+
+    if (calculatedDist <= 0 && pickupPoint && dropPoint) {
+      const route = await calculateRouteDistance(pickupPoint, dropPoint);
+      calculatedDist = route.distanceKm;
+    }
+
+    if (isNaN(calculatedDist) || calculatedDist <= 0) {
+      calculatedDist = 5.0; // Standard minimum city route distance
+    }
+    calculatedDist = Math.max(Math.round(calculatedDist * 10) / 10, 1.0);
+
+    // 3. Dynamic Fare Calculation
+    const isRoundTrip = roundTrip === "Yes" || roundTrip === "roundtrip" || roundTrip === true;
+    const tripMultiplier = isRoundTrip ? 1.8 : 1.0;
+    const finalFareAmount = Math.round(dbBaseFare + (calculatedDist * dbPerKmRate * tripMultiplier));
+
+    if (isNaN(finalFareAmount) || finalFareAmount <= 0) {
+      return res.status(500).json({
+        success: false,
+        message: "Error calculating final trip fare. Please try again."
+      });
+    }
 
     // Derive booking time if not given
     let finalBookingTime = bookingTime;
@@ -205,24 +233,25 @@ export const createBookingForWeb = async (req: any, res: Response) => {
       dropPoint,
       userId: finalUserId,
       distanceKm: calculatedDist,
-      baseFare: baseRate,
-      perKmRate: kmRate,
+      baseFare: dbBaseFare,
+      perKmRate: dbPerKmRate,
       finalFare: finalFareAmount,
 
-      travellersCount,
-      femaleCount,
-      maleCount,
+      travellersCount: Number(travellersCount) || 1,
+      femaleCount: Number(femaleCount) || 0,
+      maleCount: Number(maleCount) || 1,
       remarks,
       purpose,
       confirmStatus,
       bookingStatus,
       vehicleId,
       driverId,
-      vehicleTypeId: vType?.vehicleTypeId || vehicleTypeId,
-      preferredType: vType?.vehicleType || preferredType || "Cab",
+      vehicleTypeId: vType.vehicleTypeId,
+      preferredType: vType.vehicleType,
       roundTrip,
       pickupAirport,
       pickupStation,
+
       flightNo,
       trainNo,
       notes,
@@ -527,30 +556,58 @@ export const createBookingForWebOnCall = async (req: any, res: Response) => {
       finalBookingTime = timePart.substring(0, 8);
     }
 
-    // ✅ Dynamic Distance & Fare calculation from DB VehicleType
+    // ✅ Dynamic Distance & Fare calculation strictly from DB VehicleType
     let vType = null;
     if (vehicleTypeId) {
-      vType = await VehicleType.findByPk(vehicleTypeId);
-    } else if (preferredType) {
+      vType = await VehicleType.findOne({ where: { vehicleTypeId, isDeleted: false } });
+    }
+    if (!vType && vehicleId) {
+      const veh = await Vehicle.findByPk(vehicleId);
+      if (veh?.vehicleTypeId) {
+        vType = await VehicleType.findOne({ where: { vehicleTypeId: veh.vehicleTypeId, isDeleted: false } });
+      }
+    }
+    if (!vType && preferredType) {
       vType = await VehicleType.findOne({ where: { vehicleType: preferredType, isDeleted: false } });
     }
 
-    let calculatedDistance = Number(req.body.distanceKm) || 0;
+    if (!vType) {
+      return res.status(400).json({
+        success: false,
+        message: "Selected vehicle category was not found. Please choose an active vehicle."
+      });
+    }
+
+    const dbBaseFare = Number(vType.baseFare);
+    const dbPerKmRate = Number(vType.perKmRate);
+
+    if (isNaN(dbBaseFare) || dbBaseFare <= 0 || isNaN(dbPerKmRate) || dbPerKmRate <= 0) {
+      return res.status(400).json({
+        success: false,
+        message: `Pricing is not configured for ${vType.vehicleType}. Please contact the administrator.`
+      });
+    }
+
+    let rawDist = typeof req.body.distanceKm === "number" ? req.body.distanceKm : parseFloat(String(req.body.distanceKm || "").replace(/[^0-9.]/g, ""));
+    let calculatedDistance = !isNaN(rawDist) && rawDist > 0 ? rawDist : 0;
     if (calculatedDistance <= 0 && pickupPoint && dropPoint) {
       const route = await calculateRouteDistance(pickupPoint, dropPoint);
       calculatedDistance = route.distanceKm;
     }
-    calculatedDistance = Math.max(calculatedDistance, 1);
+    if (isNaN(calculatedDistance) || calculatedDistance <= 0) {
+      calculatedDistance = 5.0;
+    }
+    calculatedDistance = Math.max(Math.round(calculatedDistance * 10) / 10, 1.0);
 
-    const dbBaseFare = (vType?.baseFare !== undefined && vType?.baseFare !== null && Number(vType.baseFare) > 0)
-      ? Number(vType.baseFare)
-      : 250;
-    const dbPerKmRate = (vType?.perKmRate !== undefined && vType?.perKmRate !== null && Number(vType.perKmRate) > 0)
-      ? Number(vType.perKmRate)
-      : 14;
-
-    const tripMultiplier = (roundTrip === "Yes" || roundTrip === "roundtrip") ? 1.8 : 1.0;
+    const tripMultiplier = (roundTrip === "Yes" || roundTrip === "roundtrip" || roundTrip === true) ? 1.8 : 1.0;
     const computedFare = Math.round(dbBaseFare + (calculatedDistance * dbPerKmRate * tripMultiplier));
+
+    if (isNaN(computedFare) || computedFare <= 0) {
+      return res.status(500).json({
+        success: false,
+        message: "Error calculating final trip fare. Please try again."
+      });
+    }
 
     // ✅ Create booking properly with permanent fare snapshot
     const booking = await Booking.create({
@@ -558,26 +615,27 @@ export const createBookingForWebOnCall = async (req: any, res: Response) => {
       bookingTime: finalBookingTime,
       employeeId, // can be null for user
       pickupPoint,
-      pickupCity,
+      pickupCity: pickupCity || "Chennai",
       dropPoint,
       distanceKm: calculatedDistance,
       baseFare: dbBaseFare,
       perKmRate: dbPerKmRate,
       finalFare: computedFare,
-      travellersCount,
-      femaleCount,
-      maleCount,
+      travellersCount: Number(travellersCount) || 1,
+      femaleCount: Number(femaleCount) || 0,
+      maleCount: Number(maleCount) || 1,
       remarks,
       purpose,
       confirmStatus,
       bookingStatus,
       vehicleId,
       driverId,
-      vehicleTypeId: vType?.vehicleTypeId || vehicleTypeId,
-      preferredType: vType?.vehicleType || preferredType,
+      vehicleTypeId: vType.vehicleTypeId,
+      preferredType: vType.vehicleType,
       roundTrip,
       pickupAirport,
       pickupStation,
+
       flightNo,
       trainNo,
       notes,
@@ -853,19 +911,85 @@ const formattedBookingTime = parsedDateTime.format("HH:mm:ss");
     const confirmStatus = STATUS.PENDING;
     const bookingStatus = STATUS.PENDING;
     const autoApproveStatus = STATUS.PENDING;
-     const driverTripStatus = STATUS.PENDING;
-        const company = await Company.findByPk(user?.companyId);
+    const driverTripStatus = STATUS.PENDING;
+    const company = await Company.findByPk(user?.companyId);
+
+    // Authoritative dynamic pricing from DB
+    let vType = null;
+    if (vehicleTypeId) {
+      vType = await VehicleType.findOne({ where: { vehicleTypeId, isDeleted: false } });
+    }
+    if (!vType && vehicleId) {
+      const veh = await Vehicle.findByPk(vehicleId);
+      if (veh?.vehicleTypeId) {
+        vType = await VehicleType.findOne({ where: { vehicleTypeId: veh.vehicleTypeId, isDeleted: false } });
+      }
+    }
+    if (!vType && preferredType) {
+      vType = await VehicleType.findOne({ where: { vehicleType: preferredType, isDeleted: false } });
+    }
+
+    const dbBaseFare = vType?.baseFare ? Number(vType.baseFare) : 250;
+    const dbPerKmRate = vType?.perKmRate ? Number(vType.perKmRate) : 14;
+
+    let rawDist = typeof req.body.distanceKm === "number" ? req.body.distanceKm : parseFloat(String(req.body.distanceKm || "").replace(/[^0-9.]/g, ""));
+    let calculatedDistance = !isNaN(rawDist) && rawDist > 0 ? rawDist : 0;
+    if (calculatedDistance <= 0 && pickupPoint && dropPoint) {
+      const route = await calculateRouteDistance(pickupPoint, dropPoint);
+      calculatedDistance = route.distanceKm;
+    }
+    calculatedDistance = Math.max(Math.round((calculatedDistance || 5.0) * 10) / 10, 1.0);
+
+    const tripMultiplier = (roundTrip === "Yes" || roundTrip === "roundtrip" || roundTrip === true) ? 1.8 : 1.0;
+    const computedFare = Math.round(dbBaseFare + (calculatedDistance * dbPerKmRate * tripMultiplier));
 
     // --- Create Booking ---
     const booking = await Booking.create({
-     // bookingDate: bookingDateAsDate, bookingTime: formattedBookingTime, pickupPoint, pickupCity, dropPoint, travellersCount,
-      bookingDate: bookingDateAsDate, bookingTime:formattedBookingTime, pickupPoint, pickupCity, dropPoint, travellersCount,
-      femaleCount, maleCount, remarks, purpose, confirmStatus, bookingStatus, vehicleId, driverId,
-      vehicleTypeId, preferredType, roundTrip, pickupAirport, pickupStation, flightNo, trainNo, notes,  behalfOfName,behalfOfPhone,
-      pickupLongitude, pickupLatitude, dropLatitude, dropLongitude, userId:createdBy,
-      pickupArea, predefinedArea, approximatetds2, approximatetds1, createdBy, costCenter, managerUserId, managerEmail, autoApproveStatus,
+      bookingDate: bookingDateAsDate,
+      bookingTime: formattedBookingTime,
+      pickupPoint,
+      pickupCity: pickupCity || "Chennai",
+      dropPoint,
+      distanceKm: calculatedDistance,
+      baseFare: dbBaseFare,
+      perKmRate: dbPerKmRate,
+      finalFare: computedFare,
+      travellersCount: Number(travellersCount) || 1,
+      femaleCount: Number(femaleCount) || 0,
+      maleCount: Number(maleCount) || 1,
+      remarks,
+      purpose,
+      confirmStatus,
+      bookingStatus,
+      vehicleId,
+      driverId,
+      vehicleTypeId: vType?.vehicleTypeId || vehicleTypeId,
+      preferredType: vType?.vehicleType || preferredType,
+      roundTrip,
+      pickupAirport,
+      pickupStation,
+      flightNo,
+      trainNo,
+      notes,
+      behalfOfName,
+      behalfOfPhone,
+      pickupLongitude,
+      pickupLatitude,
+      dropLatitude,
+      dropLongitude,
+      userId: createdBy,
+      pickupArea,
+      predefinedArea,
+      approximatetds2,
+      approximatetds1,
+      createdBy,
+      costCenter,
+      managerUserId,
+      managerEmail,
+      autoApproveStatus,
       driverTripStatus
     });
+
 
          // ================= DANFOSS MANAGER ALERT =================
     //if (company?.companyName?.toLowerCase().includes("danfoss")) {

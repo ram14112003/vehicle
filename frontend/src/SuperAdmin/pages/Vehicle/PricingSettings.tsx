@@ -7,11 +7,9 @@ import {
   Save,
   RefreshCw,
   Info,
-  DollarSign,
-  Tag,
-  ShieldAlert,
   Users
 } from 'lucide-react';
+
 import config from '../../../config/config';
 
 interface VehicleTypeItem {
@@ -76,14 +74,15 @@ export const PricingSettings: React.FC = () => {
     const current = formData[vt.vehicleTypeId];
     if (!current) return;
 
-    if (current.baseFare < 50) {
-      showToast('Base fare must be at least ₹50', 'error');
+    if (current.baseFare < 10) {
+      showToast('Base fare must be at least ₹10', 'error');
       return;
     }
-    if (current.perKmRate < 5) {
-      showToast('Rate per KM must be at least ₹5/km', 'error');
+    if (current.perKmRate < 1) {
+      showToast('Rate per KM must be at least ₹1/km', 'error');
       return;
     }
+
 
     setSavingId(vt.vehicleTypeId);
     try {

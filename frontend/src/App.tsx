@@ -148,22 +148,19 @@ import BookingSuccess from './pages/BookingSuccess';
 
 
 const Layout = () => {
-
   const role = localStorage.getItem("role");
 
   return (
-    <div className="flex h-screen bg-gray-100">
-      {/* {role !== "manager" &&<Sidebar />} */}
-            {role !== "user" && role !== "manager" && <Sidebar />}
-
+    <div className="flex min-h-screen bg-slate-50">
+      {role !== "user" && role !== "manager" && <Sidebar />}
       <AlertContainer />
       <main
-        className={`flex-1 bg-gray-100 p-2 overflow-auto ${
-          role !== "manager" ? "ml-74" : ""
-        }`}
-      >
-        
+        className={`flex-1 bg-slate-50 min-h-screen overflow-auto ${
+          role !== "user" && role !== "manager" ? "ml-64" : ""
+        }`}
+      >
         {role === "manager" ? <TravelHeader /> : <Header />}
+
 
         <Routes>
           <Route path="/dashboard" element={<Dashboard />} />

@@ -79,12 +79,9 @@ const syncVehicleTypeRenameToPackageData = async (
 
 export const updateVehicleType = async (req: any, res: Response) => {
   const { id } = req.params;
-     const updateData = req.body;
-
-  const { vehicleType,  seatCapacity, priorMinutes } = req.body;
-
-     const newImages = req.files ? (req.files as Express.Multer.File[]).map(f => f.filename) : [];
-
+  const updateData = req.body;
+  const { vehicleType, seatCapacity, priorMinutes, baseFare, perKmRate } = req.body;
+  const newImages = req.files ? (req.files as Express.Multer.File[]).map(f => f.filename) : [];
 
   try {
     const role = req.role;
@@ -104,76 +101,63 @@ export const updateVehicleType = async (req: any, res: Response) => {
       return res.status(404).json({ message: "Vehicle type not found" });
     }
 
-    
     if (newImages.length > 0) {
       updateData.vehicleImg = newImages;
     }
 
-        if (updateData.vehicleType && updateData.vehicleType !== existingVehicleType.vehicleType) {
-            const existing = await VehicleType.findOne({
-                where: { vehicleType: updateData.vehicleType }
-            });
-            if (existing) {
-                return res.status(400).json({ message: 'Vehicle name already exists' });
-            }
-        }
+    if (updateData.vehicleType && updateData.vehicleType !== existingVehicleType.vehicleType) {
+      const existing = await VehicleType.findOne({
+        where: { vehicleType: updateData.vehicleType }
+      });
+      if (existing && existing.vehicleTypeId !== id) {
+        return res.status(400).json({ message: 'Vehicle name already exists' });
+      }
+    }
 
     const oldName = String(existingVehicleType.vehicleType || "");
     const newName = vehicleType !== undefined ? String(vehicleType) : oldName;
-
-    // ✅ prevent duplicates
-    if (vehicleType && vehicleType !== existingVehicleType.vehicleType) {
-      const duplicate = await VehicleType.findOne({ where: { vehicleType } });
-      if (duplicate && duplicate.vehicleTypeId !== id) {
-        return res.status(400).json({ message: "Vehicle type name already exists" });
-      }
-    }
 
     const sequelize = VehicleType.sequelize;
     if (!sequelize) {
       return res.status(500).json({ message: "DB connection not found" });
     }
 
-  const result = await sequelize.transaction(async (transaction) => {
-  if (vehicleType !== undefined)
-    existingVehicleType.vehicleType = vehicleType;
+    const result = await sequelize.transaction(async (transaction) => {
+      if (vehicleType !== undefined) existingVehicleType.vehicleType = vehicleType;
+      if (seatCapacity !== undefined) existingVehicleType.seatCapacity = Number(seatCapacity);
+      if (priorMinutes !== undefined) (existingVehicleType as any).priorMinutes = Number(priorMinutes);
+      if (baseFare !== undefined && !isNaN(Number(baseFare))) existingVehicleType.baseFare = Number(baseFare);
+      if (perKmRate !== undefined && !isNaN(Number(perKmRate))) existingVehicleType.perKmRate = Number(perKmRate);
 
-  if (seatCapacity !== undefined)
-    existingVehicleType.seatCapacity = Number(seatCapacity);
+      if (newImages.length > 0) {
+        (existingVehicleType as any).vehicleImg = newImages;
+      }
 
-  if (priorMinutes !== undefined)
-    (existingVehicleType as any).priorMinutes = Number(priorMinutes);
+      await existingVehicleType.save({ transaction });
 
-  // ✅ IMAGE UPDATE (THIS WAS MISSING)
-  if (newImages.length > 0) {
-    (existingVehicleType as any).vehicleImg = newImages;
-  }
+      let packagesUpdatedCount = 0;
+      if (oldName && newName && oldName !== newName) {
+        packagesUpdatedCount = await syncVehicleTypeRenameToPackageData(
+          oldName,
+          newName,
+          transaction
+        );
+      }
 
-  await existingVehicleType.save({ transaction });
-
-  let packagesUpdatedCount = 0;
-  if (oldName && newName && oldName !== newName) {
-    packagesUpdatedCount = await syncVehicleTypeRenameToPackageData(
-      oldName,
-      newName,
-      transaction
-    );
-  }
-
-  return { packagesUpdatedCount };
-});
-
+      return { packagesUpdatedCount };
+    });
 
     return res.status(200).json({
       message: "Vehicle type updated successfully",
       data: existingVehicleType,
-      packagesUpdatedCount: result.packagesUpdatedCount, // ✅ how many records updated
+      packagesUpdatedCount: result.packagesUpdatedCount,
     });
   } catch (err) {
     console.error("Error updating vehicle type:", err);
     return res.status(500).json({ error: "Internal server error" });
   }
 };
+
 export const getAllVehicleTypesforWeb = async (req: Request, res: Response) => {
   try {
     const { status } = req.query;
@@ -454,8 +438,13 @@ export const getVehicleTypeWithVehicles = async (req: Request, res: Response) =>
         "vehicleType",
         "priorMinutes",
         "seatCapacity",
-        
+        "baseFare",
+        "perKmRate",
+        "vehicleImg",
+        "AdvanceBookingHours",
+        "bookingType"
       ],
+
       include: [
         {
           model: Vehicle,
@@ -585,20 +574,28 @@ export const calculateFare = async (req: Request, res: Response) => {
       });
     }
 
-    const seats = vType?.seatCapacity || 4;
-    const typeName = vType?.vehicleType?.toLowerCase() || "";
+    if (!vType) {
+      return res.status(404).json({
+        success: false,
+        message: "Vehicle type not found in database."
+      });
+    }
 
-    // Dynamic Base Fare & Per KM Rate from DB VehicleType
-    const baseFare = (vType?.baseFare !== undefined && vType?.baseFare !== null && Number(vType.baseFare) > 0)
-      ? Number(vType.baseFare)
-      : 250;
-    const perKmRate = (vType?.perKmRate !== undefined && vType?.perKmRate !== null && Number(vType.perKmRate) > 0)
-      ? Number(vType.perKmRate)
-      : 14;
+    const seats = vType.seatCapacity || 4;
+    const dbBaseFare = Number(vType.baseFare);
+    const dbPerKmRate = Number(vType.perKmRate);
+
+    if (isNaN(dbBaseFare) || dbBaseFare <= 0 || isNaN(dbPerKmRate) || dbPerKmRate <= 0) {
+      return res.status(400).json({
+        success: false,
+        message: `Pricing is not configured for ${vType.vehicleType}. Please contact the administrator.`
+      });
+    }
 
     const tripMultiplier = tripType === "roundtrip" ? 1.8 : 1.0;
-    const distanceFare = Math.round(dist * perKmRate * tripMultiplier);
-    const finalFare = Math.round(baseFare + distanceFare);
+    const distanceFare = Math.round(dist * dbPerKmRate * tripMultiplier);
+    const finalFare = Math.round(dbBaseFare + distanceFare);
+
 
 
     return res.status(200).json({
@@ -611,12 +608,13 @@ export const calculateFare = async (req: Request, res: Response) => {
         distanceKm: dist,
         durationMins,
         tripType,
-        baseFare,
-        perKmRate,
+        baseFare: dbBaseFare,
+        perKmRate: dbPerKmRate,
         distanceFare,
         taxesIncluded: true,
         finalFare,
         totalFare: finalFare,
+
         estimatedTimeMinutes: durationMins
       }
     });

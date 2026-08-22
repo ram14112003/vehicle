@@ -167,9 +167,10 @@ useEffect(() => {
     const invalidEmails = emailList.filter((email: string) => !emailRegex.test(email));
     if (invalidEmails.length > 0) {
       showToast(
-        `Invalid email(s): ${invalidEmails.join(", ")}. Example: gracecabs@gmail.com`,
+        `Invalid email(s): ${invalidEmails.join(", ")}. Example: easyride@gmail.com`,
         "warn"
       );
+
       return;
     }
 

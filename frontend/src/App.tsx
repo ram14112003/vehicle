@@ -235,10 +235,13 @@ const Layout = () => {
           <Route path="/vendors/add" element={<AddVendor />} />
           <Route path="/vendors/list" element={<ListVendor />} />
           {/* Drivers Routes */}
-          <Route path="/drivers/add" element={<AddDriver />} />
+          <Route path="/drivers" element={<ListDriver />} />
           <Route path="/drivers/list" element={<ListDriver />} />
+          <Route path="/driver/list" element={<ListDriver />} />
+          <Route path="/drivers/add" element={<AddDriver />} />
           <Route path="/drivers/assignedlist" element={<AssignedList />} />
           <Route path="/drivers/tripdetails" element={<TripDetails />} />
+
           {/* Invoice Routes */}
           <Route path="/invoice/pending" element={<PendingInvoices />} />
           <Route path="/invoice/reminder" element={<InvoiceReminder />} />

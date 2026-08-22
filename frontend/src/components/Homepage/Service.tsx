@@ -15,11 +15,12 @@ const services = [
 
 // FULL backside details
 const details = [
-  "The Fleet Management division of Grace Cabs manages approx 400 Vehicles: 150 company-owned and 250 associate vehicles. Includes 135 Sedan cabs, 75 SUVs, 130 LMVs, 60 Buses. Fleet equipped with GPS tracking, communication & information system.",
+  "The Fleet Management division of EasyRide manages approx 400 Vehicles: 150 company-owned and 250 associate vehicles. Includes 135 Sedan cabs, 75 SUVs, 130 LMVs, 60 Buses. Fleet equipped with GPS tracking, communication & information system.",
   "Trusted Car Rental Service with over 20 years of expertise.",
   "Transport-permit vehicles in road-worthy condition, not older than 48 months, deployed with company logo for identification.",
   "Uniformed and experienced chauffeurs with identity cards appointed for all operating sites.",
 ];
+
 
 const PremiumServices: React.FC = () => {
   return (

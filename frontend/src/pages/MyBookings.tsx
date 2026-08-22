@@ -1,18 +1,24 @@
 import React, { useState, useEffect, useCallback } from "react";
 import { Link } from "react-router-dom";
-import { 
-  Calendar, 
-  Car, 
-  Clock, 
-  CheckCircle2, 
-  XCircle, 
-  Eye, 
-  Plus, 
-  Search, 
-  Loader2, 
+import {
+  Calendar,
+  Car,
+  Clock,
+  CheckCircle2,
+  XCircle,
+  Eye,
+  Plus,
+  Search,
+  Loader2,
   X,
-  LogIn
+  LogIn,
+  CreditCard,
+  Banknote,
+  ShieldCheck,
+  Phone,
+  Navigation
 } from "lucide-react";
+
 
 import Navbar from "../components/Navigation/Navbar";
 import Footer from "../components/Navigation/Footer";
@@ -31,10 +37,16 @@ interface BookingItem {
   bookingTime: string;
   confirmStatus: string;
   bookingStatus: string;
+  paymentStatus: string;
+  paymentMethod?: string;
+  paymentTransactionId?: string;
+  paidAt?: string;
   vehicleType?: string;
   fare?: number;
   driverName?: string;
   driverPhone?: string;
+  vehicleNumber?: string;
+  vehicleModel?: string;
   createdAt: string;
 }
 
@@ -42,13 +54,24 @@ export const MyBookings: React.FC = () => {
   const { user, isAuthenticated } = useAuth();
   const userId = user?.userId || localStorage.getItem("userId");
 
-  const [activeTab, setActiveTab] = useState<"all" | "upcoming" | "completed" | "cancelled">("upcoming");
+  const [activeTab, setActiveTab] = useState<"all" | "active" | "completed" | "cancelled">("active");
   const [loading, setLoading] = useState<boolean>(true);
   const [bookings, setBookings] = useState<BookingItem[]>([]);
   const [selectedBooking, setSelectedBooking] = useState<BookingItem | null>(null);
   const [searchQuery, setSearchQuery] = useState<string>("");
   const [authModalOpen, setAuthModalOpen] = useState<boolean>(false);
   const [cancellingId, setCancellingId] = useState<string | null>(null);
+
+  // Pay Now Modal State
+  const [payModalBooking, setPayModalBooking] = useState<BookingItem | null>(null);
+  const [selectedPaymentMethod, setSelectedPaymentMethod] = useState<"Online" | "Cash">("Online");
+  const [processingPayment, setProcessingPayment] = useState<boolean>(false);
+  const [paymentSuccessData, setPaymentSuccessData] = useState<{
+    bookingCode: string;
+    amount: number;
+    method: string;
+    txnId: string;
+  } | null>(null);
 
   const fetchBookings = useCallback(async () => {
     if (!userId) {
@@ -63,22 +86,20 @@ export const MyBookings: React.FC = () => {
 
       if (res.data?.success && Array.isArray(res.data.data)) {
         const mapped: BookingItem[] = res.data.data.map((b: any) => {
-          const rawDate = b.bookingDate ? new Date(b.bookingDate).toLocaleDateString("en-GB", {
-            day: "2-digit",
-            month: "short",
-            year: "numeric"
-          }) : "N/A";
+          const rawDate = b.bookingDate
+            ? new Date(b.bookingDate).toLocaleDateString("en-GB", {
+                day: "2-digit",
+                month: "short",
+                year: "numeric"
+              })
+            : "N/A";
 
-          let status = "Pending";
-          if (b.confirmStatus === "1" || b.confirmStatus === "Confirmed") status = "Confirmed";
-          else if (b.confirmStatus === "6" || b.confirmStatus === "Cancelled") status = "Cancelled";
-          else if (b.confirmStatus === "5" || b.bookingStatus === "Completed") status = "Completed";
-
-          const vName = b.preferredType || b.vehicleType?.vehicleType || b.vehicle?.vehicleName || "Sedan Prime";
-          const distVal = (b.distanceKm && Number(b.distanceKm) > 0) ? Number(b.distanceKm) : 0;
-          const finalFareVal = (b.finalFare && Number(b.finalFare) > 0)
-            ? Number(b.finalFare)
-            : (b.invoice?.[0]?.invoiceAmount || b.invoice?.[0]?.totalAmount || 550);
+          const vName = b.preferredType || b.vehicleType?.vehicleType || b.vehicle?.vehicleName || "Cab";
+          const distVal = b.distanceKm && Number(b.distanceKm) > 0 ? Number(b.distanceKm) : 0;
+          const finalFareVal =
+            b.finalFare && Number(b.finalFare) > 0
+              ? Number(b.finalFare)
+              : b.invoice?.[0]?.invoiceAmount || b.invoice?.[0]?.totalAmount || 550;
 
           return {
             bookingId: b.bookingId,
@@ -88,15 +109,20 @@ export const MyBookings: React.FC = () => {
             distanceKm: distVal,
             bookingDate: rawDate,
             bookingTime: b.bookingTime ? b.bookingTime.substring(0, 5) : "10:00 AM",
-            confirmStatus: status,
-            bookingStatus: b.bookingStatus || status,
+            confirmStatus: b.confirmStatus || "Confirmed",
+            bookingStatus: b.bookingStatus || b.confirmStatus || "CONFIRMED",
+            paymentStatus: b.paymentStatus || "PENDING",
+            paymentMethod: b.paymentMethod,
+            paymentTransactionId: b.paymentTransactionId,
+            paidAt: b.paidAt,
             vehicleType: vName,
             fare: Number(finalFareVal),
             driverName: b.driver?.driverName,
             driverPhone: b.driver?.phno,
+            vehicleNumber: b.vehicle?.vehicleNo || b.vehicleMaster?.vehicleNumber || undefined,
+            vehicleModel: b.vehicle?.vehicleName || undefined,
             createdAt: b.createdAt || new Date().toISOString()
           };
-
         });
         setBookings(mapped);
       } else {
@@ -139,9 +165,50 @@ export const MyBookings: React.FC = () => {
     }
   };
 
+  // Process Post-Ride Payment
+  const handleProcessPayment = async () => {
+    if (!payModalBooking) return;
+    setProcessingPayment(true);
+    try {
+      const res = await axiosInstance.post(`/order/pay-now/${payModalBooking.bookingId}`, {
+        paymentMethod: selectedPaymentMethod
+      });
+
+      if (res.data?.success) {
+        showToast(
+          selectedPaymentMethod === "Online"
+            ? "Payment verified! Thank you for riding with EasyRide."
+            : "Cash payment recorded. Please hand fare to your chauffeur.",
+          "success"
+        );
+
+
+        if (selectedPaymentMethod === "Online") {
+          setPaymentSuccessData({
+            bookingCode: payModalBooking.bookingCode,
+            amount: payModalBooking.fare || 0,
+            method: "Online (Card / UPI)",
+            txnId: res.data?.data?.paymentTransactionId || `PAY-${Date.now()}`
+          });
+        } else {
+          setPayModalBooking(null);
+        }
+
+        await fetchBookings();
+      } else {
+        showToast(res.data?.message || "Payment processing failed.", "error");
+      }
+    } catch (err: any) {
+      console.error("Payment error:", err);
+      showToast(err.response?.data?.message || "Payment failed. Please try again.", "error");
+    } finally {
+      setProcessingPayment(false);
+    }
+  };
+
   // Filter bookings based on active tab and search query
   const filteredBookings = bookings.filter((b) => {
-    const matchesSearch = 
+    const matchesSearch =
       b.bookingCode.toLowerCase().includes(searchQuery.toLowerCase()) ||
       b.pickupPoint.toLowerCase().includes(searchQuery.toLowerCase()) ||
       b.dropPoint.toLowerCase().includes(searchQuery.toLowerCase()) ||
@@ -149,46 +216,67 @@ export const MyBookings: React.FC = () => {
 
     if (!matchesSearch) return false;
 
+    const s = (b.confirmStatus || "").toLowerCase();
+    const isCompleted = s.includes("completed");
+    const isCancelled = s.includes("cancelled") || s.includes("declined");
+    const isActive = !isCompleted && !isCancelled;
+
     if (activeTab === "all") return true;
-    if (activeTab === "upcoming") return b.confirmStatus === "Pending" || b.confirmStatus === "Confirmed";
-    if (activeTab === "completed") return b.confirmStatus === "Completed";
-    if (activeTab === "cancelled") return b.confirmStatus === "Cancelled";
+    if (activeTab === "active") return isActive;
+    if (activeTab === "completed") return isCompleted;
+    if (activeTab === "cancelled") return isCancelled;
     return true;
   });
 
-  const getStatusBadge = (status: string) => {
-    switch (status.toLowerCase()) {
-      case "confirmed":
-        return (
-          <span className="inline-flex items-center gap-1 px-3 py-1 rounded-full text-xs font-bold bg-emerald-100 text-emerald-800 border border-emerald-200">
-            <CheckCircle2 size={13} /> Confirmed
-          </span>
-        );
-      case "pending":
-        return (
-          <span className="inline-flex items-center gap-1 px-3 py-1 rounded-full text-xs font-bold bg-amber-100 text-amber-800 border border-amber-200">
-            <Clock size={13} /> Pending
-          </span>
-        );
-      case "completed":
-        return (
-          <span className="inline-flex items-center gap-1 px-3 py-1 rounded-full text-xs font-bold bg-blue-100 text-blue-800 border border-blue-200">
-            <CheckCircle2 size={13} /> Completed
-          </span>
-        );
-      case "cancelled":
-        return (
-          <span className="inline-flex items-center gap-1 px-3 py-1 rounded-full text-xs font-bold bg-rose-100 text-rose-800 border border-rose-200">
-            <XCircle size={13} /> Cancelled
-          </span>
-        );
-      default:
-        return (
-          <span className="inline-flex items-center gap-1 px-3 py-1 rounded-full text-xs font-bold bg-slate-100 text-slate-800">
-            {status}
-          </span>
-        );
+  // Dynamic lifecycle status badge
+  const getLifecycleBadge = (b: BookingItem) => {
+    const cs = (b.confirmStatus || "").toLowerCase();
+    const ps = (b.paymentStatus || "").toUpperCase();
+
+    if (cs.includes("cancel") || cs.includes("decline")) {
+      return (
+        <span className="inline-flex items-center gap-1.5 px-3 py-1 rounded-full text-xs font-bold bg-rose-100 text-rose-800 border border-rose-200">
+          <XCircle size={13} /> Cancelled
+        </span>
+      );
     }
+
+    if (cs.includes("completed")) {
+      if (ps === "PAID") {
+        return (
+          <span className="inline-flex items-center gap-1.5 px-3 py-1 rounded-full text-xs font-bold bg-emerald-100 text-emerald-800 border border-emerald-200">
+            <CheckCircle2 size={13} /> Completed (Paid)
+          </span>
+        );
+      }
+      return (
+        <span className="inline-flex items-center gap-1.5 px-3 py-1 rounded-full text-xs font-bold bg-amber-100 text-amber-900 border border-amber-300 animate-pulse">
+          <Clock size={13} /> Ride Completed (Payment Pending)
+        </span>
+      );
+    }
+
+    if (cs.includes("trip started") || cs.includes("started") || cs.includes("on_trip")) {
+      return (
+        <span className="inline-flex items-center gap-1.5 px-3 py-1 rounded-full text-xs font-bold bg-indigo-100 text-indigo-800 border border-indigo-200">
+          <Navigation size={13} className="animate-spin" /> Trip In Progress
+        </span>
+      );
+    }
+
+    if (cs.includes("driver assigned") || cs.includes("assigned") || Boolean(b.driverName)) {
+      return (
+        <span className="inline-flex items-center gap-1.5 px-3 py-1 rounded-full text-xs font-bold bg-blue-100 text-blue-800 border border-blue-200">
+          <Car size={13} /> Driver Assigned
+        </span>
+      );
+    }
+
+    return (
+      <span className="inline-flex items-center gap-1.5 px-3 py-1 rounded-full text-xs font-bold bg-emerald-50 text-emerald-700 border border-emerald-200">
+        <CheckCircle2 size={13} /> Confirmed (Waiting Driver)
+      </span>
+    );
   };
 
   return (
@@ -197,7 +285,6 @@ export const MyBookings: React.FC = () => {
       <Navbar />
 
       <main className="flex-1 max-w-6xl w-full mx-auto px-4 sm:px-6 lg:px-8 py-8 sm:py-10">
-        
         {/* Top Header */}
         <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 mb-8">
           <div>
@@ -205,7 +292,7 @@ export const MyBookings: React.FC = () => {
               My Bookings
             </h1>
             <p className="text-sm text-slate-500 mt-1">
-              Live database tracking for your upcoming and past rides
+              Live status, chauffeur tracking, and post-ride checkout
             </p>
           </div>
 
@@ -226,9 +313,10 @@ export const MyBookings: React.FC = () => {
             <div>
               <h3 className="text-xl font-black text-slate-900">Sign in to view your rides</h3>
               <p className="text-xs text-slate-500 mt-1">
-                Your bookings are privately linked to your Grace Cabs account.
+                Your bookings are privately linked to your EasyRide account.
               </p>
             </div>
+
             <button
               type="button"
               onClick={() => setAuthModalOpen(true)}
@@ -242,21 +330,27 @@ export const MyBookings: React.FC = () => {
           <>
             {/* Tab Filters & Search Bar */}
             <div className="bg-white rounded-3xl p-4 sm:p-5 shadow-lg border border-slate-100 mb-8 space-y-4">
-              
               <div className="flex flex-col md:flex-row md:items-center justify-between gap-4">
-                
                 {/* Segmented Tabs */}
                 <div className="flex items-center gap-1.5 p-1.5 bg-slate-100 rounded-2xl overflow-x-auto">
                   <button
                     type="button"
-                    onClick={() => setActiveTab("upcoming")}
+                    onClick={() => setActiveTab("active")}
                     className={`px-4 py-2 rounded-xl text-xs sm:text-sm font-bold whitespace-nowrap transition-all ${
-                      activeTab === "upcoming"
+                      activeTab === "active"
                         ? "bg-white text-slate-900 shadow-sm"
                         : "text-slate-600 hover:text-slate-900"
                     }`}
                   >
-                    Upcoming ({bookings.filter(b => b.confirmStatus === "Pending" || b.confirmStatus === "Confirmed").length})
+                    Active Rides (
+                    {
+                      bookings.filter(
+                        (b) =>
+                          !b.confirmStatus.toLowerCase().includes("completed") &&
+                          !b.confirmStatus.toLowerCase().includes("cancel")
+                      ).length
+                    }
+                    )
                   </button>
 
                   <button
@@ -268,7 +362,9 @@ export const MyBookings: React.FC = () => {
                         : "text-slate-600 hover:text-slate-900"
                     }`}
                   >
-                    Completed ({bookings.filter(b => b.confirmStatus === "Completed").length})
+                    Completed (
+                    {bookings.filter((b) => b.confirmStatus.toLowerCase().includes("completed")).length}
+                    )
                   </button>
 
                   <button
@@ -280,7 +376,9 @@ export const MyBookings: React.FC = () => {
                         : "text-slate-600 hover:text-slate-900"
                     }`}
                   >
-                    Cancelled ({bookings.filter(b => b.confirmStatus === "Cancelled").length})
+                    Cancelled (
+                    {bookings.filter((b) => b.confirmStatus.toLowerCase().includes("cancel")).length}
+                    )
                   </button>
 
                   <button
@@ -307,7 +405,6 @@ export const MyBookings: React.FC = () => {
                     className="w-full pl-10 pr-4 py-2.5 rounded-xl bg-slate-50 border border-slate-200 focus:border-amber-500 focus:bg-white text-xs sm:text-sm font-semibold text-slate-900 focus:outline-none"
                   />
                 </div>
-
               </div>
             </div>
 
@@ -339,91 +436,151 @@ export const MyBookings: React.FC = () => {
             ) : (
               /* Dynamic Bookings Card List */
               <div className="grid grid-cols-1 md:grid-cols-2 gap-5">
-                {filteredBookings.map((b) => (
-                  <div
-                    key={b.bookingId}
-                    className="bg-white rounded-3xl p-6 shadow-md hover:shadow-xl border border-slate-100 hover:border-slate-200 transition-all flex flex-col justify-between space-y-5"
-                  >
-                    {/* Card Header: Code & Status */}
-                    <div className="flex items-center justify-between">
-                      <div className="flex items-center gap-2">
-                        <div className="w-10 h-10 rounded-2xl bg-slate-100 flex items-center justify-center text-slate-800 font-black text-xs">
-                          <Car size={20} className="text-amber-500" />
+                {filteredBookings.map((b) => {
+                  const isCompleted = (b.confirmStatus || "").toLowerCase().includes("completed");
+                  const isPendingPayment = isCompleted && b.paymentStatus !== "PAID";
+
+                  return (
+                    <div
+                      key={b.bookingId}
+                      className={`bg-white rounded-3xl p-6 shadow-md hover:shadow-xl border transition-all flex flex-col justify-between space-y-5 ${
+                        isPendingPayment
+                          ? "border-amber-400 ring-2 ring-amber-200/60 bg-amber-50/10"
+                          : "border-slate-100 hover:border-slate-200"
+                      }`}
+                    >
+                      {/* Card Header: Code & Status */}
+                      <div className="flex items-center justify-between gap-2">
+                        <div className="flex items-center gap-3">
+                          <div className="w-10 h-10 rounded-2xl bg-slate-900 text-amber-400 flex items-center justify-center font-black text-xs shadow-sm">
+                            <Car size={18} />
+                          </div>
+                          <div>
+                            <span className="text-[11px] text-slate-400 font-bold block">
+                              Ref: {b.bookingCode}
+                            </span>
+                            <h4 className="text-sm font-black text-slate-900">{b.vehicleType}</h4>
+                          </div>
                         </div>
-                        <div>
-                          <span className="text-xs text-slate-400 font-bold block">ID: {b.bookingCode}</span>
-                          <h4 className="text-sm font-black text-slate-900">{b.vehicleType}</h4>
-                        </div>
+
+                        {getLifecycleBadge(b)}
                       </div>
 
-                      {getStatusBadge(b.confirmStatus)}
-                    </div>
-
-                    {/* Route */}
-                    <div className="space-y-2 bg-slate-50 p-4 rounded-2xl border border-slate-100 text-xs font-semibold text-slate-800">
-                      <div className="flex items-start gap-2.5">
-                        <span className="w-2 h-2 rounded-full bg-emerald-500 mt-1.5 flex-shrink-0" />
-                        <span className="truncate">{b.pickupPoint}</span>
-                      </div>
-                      <div className="flex items-start gap-2.5">
-                        <span className="w-2 h-2 rounded-full bg-rose-500 mt-1.5 flex-shrink-0" />
-                        <span className="truncate">{b.dropPoint}</span>
-                      </div>
-                      {b.distanceKm ? (
-                        <div className="pt-1.5 border-t border-slate-200/50 flex justify-between text-[11px] text-slate-500 font-medium">
-                          <span>Trip Distance:</span>
-                          <span className="font-bold text-slate-700">{b.distanceKm} km</span>
+                      {/* Route */}
+                      <div className="space-y-2 bg-slate-50 p-4 rounded-2xl border border-slate-100 text-xs font-semibold text-slate-800">
+                        <div className="flex items-start gap-2.5">
+                          <span className="w-2 h-2 rounded-full bg-emerald-500 mt-1.5 flex-shrink-0" />
+                          <span className="truncate">{b.pickupPoint}</span>
                         </div>
-                      ) : null}
-                    </div>
-
-                    {/* Footer / Schedule & Actions */}
-                    <div className="pt-2 border-t border-slate-100 flex items-center justify-between">
-                      <div className="text-xs">
-                        <div className="flex items-center gap-1.5 text-slate-500 font-medium">
-                          <Calendar size={13} /> {b.bookingDate} at {b.bookingTime}
+                        <div className="flex items-start gap-2.5">
+                          <span className="w-2 h-2 rounded-full bg-rose-500 mt-1.5 flex-shrink-0" />
+                          <span className="truncate">{b.dropPoint}</span>
                         </div>
-                        <div className="text-base font-black text-slate-900 mt-0.5">
-                          ₹{b.fare}
-                        </div>
+                        {b.distanceKm ? (
+                          <div className="pt-2 border-t border-slate-200/60 flex justify-between text-[11px] text-slate-500 font-medium">
+                            <span>Validated Distance:</span>
+                            <span className="font-bold text-slate-800">{b.distanceKm} km</span>
+                          </div>
+                        ) : null}
                       </div>
 
-                      <div className="flex items-center gap-2">
-                        <button
-                          type="button"
-                          onClick={() => setSelectedBooking(b)}
-                          className="px-3.5 py-2 rounded-xl bg-slate-100 hover:bg-slate-200 text-slate-800 text-xs font-bold transition-colors flex items-center gap-1.5"
-                        >
-                          <Eye size={14} /> Details
-                        </button>
+                      {/* Assigned Chauffeur Banner (if assigned) */}
+                      {b.driverName && (
+                        <div className="p-3.5 rounded-2xl bg-blue-50/80 border border-blue-100 flex items-center justify-between text-xs">
+                          <div className="flex items-center gap-2.5">
+                            <div className="w-8 h-8 rounded-full bg-blue-600 text-white flex items-center justify-center font-bold text-xs">
+                              {b.driverName.charAt(0)}
+                            </div>
+                            <div>
+                              <span className="font-bold text-slate-900 block">{b.driverName}</span>
+                              <span className="text-[11px] text-blue-700 font-semibold">
+                                Chauffeur Assigned
+                              </span>
+                            </div>
+                          </div>
+                          {b.driverPhone && (
+                            <a
+                              href={`tel:${b.driverPhone}`}
+                              className="px-3 py-1.5 rounded-xl bg-white border border-blue-200 text-blue-700 font-bold text-xs flex items-center gap-1 hover:bg-blue-50 transition-colors"
+                            >
+                              <Phone size={12} /> Call
+                            </a>
+                          )}
+                        </div>
+                      )}
 
-                        {b.confirmStatus === "Pending" && (
+                      {/* Post-Ride Payment Prompt Banner */}
+                      {isPendingPayment && (
+                        <div className="p-4 rounded-2xl bg-gradient-to-r from-amber-500 to-amber-400 text-slate-950 flex items-center justify-between shadow-md">
+                          <div>
+                            <span className="text-[10px] uppercase font-black tracking-wider block text-slate-900/80">
+                              Ride Completed
+                            </span>
+                            <span className="text-sm font-black">
+                              Final Fare: ₹{b.fare}
+                            </span>
+                          </div>
                           <button
                             type="button"
-                            disabled={cancellingId === b.bookingId}
-                            onClick={() => handleCancelBooking(b.bookingId)}
-                            className="px-3 py-2 rounded-xl text-xs font-bold text-rose-600 hover:bg-rose-50 transition-colors disabled:opacity-50"
+                            onClick={() => {
+                              setSelectedPaymentMethod("Online");
+                              setPayModalBooking(b);
+                            }}
+                            className="px-4 py-2 rounded-xl bg-slate-950 hover:bg-slate-900 text-amber-400 font-black text-xs shadow-md flex items-center gap-1.5 transition-all"
                           >
-                            {cancellingId === b.bookingId ? "Cancelling..." : "Cancel"}
+                            <CreditCard size={14} /> Pay Now
                           </button>
-                        )}
+                        </div>
+                      )}
+
+                      {/* Footer / Schedule & Actions */}
+                      <div className="pt-2 border-t border-slate-100 flex items-center justify-between">
+                        <div className="text-xs">
+                          <div className="flex items-center gap-1.5 text-slate-500 font-medium">
+                            <Calendar size={13} /> {b.bookingDate} at {b.bookingTime}
+                          </div>
+                          <div className="text-base font-black text-slate-900 mt-0.5">
+                            ₹{b.fare}{" "}
+                            <span className="text-[10px] font-normal text-slate-400">
+                              ({b.paymentStatus === "PAID" ? "Paid" : "Payable"})
+                            </span>
+                          </div>
+                        </div>
+
+                        <div className="flex items-center gap-2">
+                          <button
+                            type="button"
+                            onClick={() => setSelectedBooking(b)}
+                            className="px-3.5 py-2 rounded-xl bg-slate-100 hover:bg-slate-200 text-slate-800 text-xs font-bold transition-colors flex items-center gap-1.5"
+                          >
+                            <Eye size={14} /> Details
+                          </button>
+
+                          {b.confirmStatus === "Pending" && (
+                            <button
+                              type="button"
+                              disabled={cancellingId === b.bookingId}
+                              onClick={() => handleCancelBooking(b.bookingId)}
+                              className="px-3 py-2 rounded-xl text-xs font-bold text-rose-600 hover:bg-rose-50 transition-colors disabled:opacity-50"
+                            >
+                              {cancellingId === b.bookingId ? "Cancelling..." : "Cancel"}
+                            </button>
+                          )}
+                        </div>
                       </div>
                     </div>
-
-                  </div>
-                ))}
+                  );
+                })}
               </div>
             )}
           </>
         )}
-
       </main>
 
       {/* Booking Details Modal */}
       {selectedBooking && (
         <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-slate-950/60 backdrop-blur-sm animate-in fade-in duration-150">
           <div className="bg-white rounded-3xl shadow-2xl border border-slate-100 max-w-md w-full p-6 space-y-6 animate-in zoom-in-95 duration-200">
-            
             <div className="flex items-center justify-between border-b border-slate-100 pb-4">
               <div>
                 <span className="text-xs text-slate-400 font-bold block">Reference No</span>
@@ -441,53 +598,108 @@ export const MyBookings: React.FC = () => {
             {/* Status & Vehicle */}
             <div className="flex items-center justify-between">
               <div>
-                <span className="text-xs text-slate-500">Vehicle Type</span>
+                <span className="text-xs text-slate-500 font-semibold">Vehicle Category</span>
                 <p className="text-sm font-bold text-slate-900">{selectedBooking.vehicleType}</p>
               </div>
-              {getStatusBadge(selectedBooking.confirmStatus)}
+              {getLifecycleBadge(selectedBooking)}
             </div>
 
             {/* Route Details */}
             <div className="space-y-3 bg-slate-50 p-4 rounded-2xl text-xs font-semibold text-slate-800">
               <div>
-                <span className="text-[10px] uppercase font-bold text-slate-400 block">Pickup Location</span>
+                <span className="text-[10px] uppercase font-bold text-slate-400 block">
+                  Pickup Location
+                </span>
                 <p className="text-slate-900 mt-0.5">{selectedBooking.pickupPoint}</p>
               </div>
               <div>
-                <span className="text-[10px] uppercase font-bold text-slate-400 block">Drop Destination</span>
+                <span className="text-[10px] uppercase font-bold text-slate-400 block">
+                  Drop Destination
+                </span>
                 <p className="text-slate-900 mt-0.5">{selectedBooking.dropPoint}</p>
               </div>
               {selectedBooking.distanceKm ? (
                 <div>
-                  <span className="text-[10px] uppercase font-bold text-slate-400 block">Trip Distance</span>
-                  <p className="text-slate-900 mt-0.5 font-bold">{selectedBooking.distanceKm} km</p>
+                  <span className="text-[10px] uppercase font-bold text-slate-400 block">
+                    Trip Distance
+                  </span>
+                  <p className="text-slate-900 mt-0.5 font-bold">
+                    {selectedBooking.distanceKm} km
+                  </p>
                 </div>
               ) : null}
               <div>
-                <span className="text-[10px] uppercase font-bold text-slate-400 block">Scheduled Date & Time</span>
-                <p className="text-slate-900 mt-0.5">{selectedBooking.bookingDate} at {selectedBooking.bookingTime}</p>
+                <span className="text-[10px] uppercase font-bold text-slate-400 block">
+                  Scheduled Date & Time
+                </span>
+                <p className="text-slate-900 mt-0.5">
+                  {selectedBooking.bookingDate} at {selectedBooking.bookingTime}
+                </p>
               </div>
             </div>
 
-
-            {/* Driver Info if assigned in DB */}
+            {/* Assigned Driver Details (if assigned) */}
             {selectedBooking.driverName && (
-              <div className="p-4 rounded-2xl bg-amber-50 border border-amber-200/60 text-xs">
-                <span className="text-[10px] uppercase font-bold text-amber-700 block">Assigned Chauffeur</span>
-                <div className="flex items-center justify-between mt-1">
+              <div className="p-4 rounded-2xl bg-blue-50 border border-blue-200/70 text-xs space-y-2">
+                <span className="text-[10px] uppercase font-black text-blue-800 block tracking-wider">
+                  Assigned Chauffeur & Vehicle
+                </span>
+                <div className="flex items-center justify-between">
                   <span className="font-bold text-slate-900">{selectedBooking.driverName}</span>
-                  <a href={`tel:${selectedBooking.driverPhone}`} className="text-amber-800 font-bold hover:underline">
-                    {selectedBooking.driverPhone}
-                  </a>
+                  {selectedBooking.driverPhone && (
+                    <a
+                      href={`tel:${selectedBooking.driverPhone}`}
+                      className="text-blue-700 font-bold hover:underline"
+                    >
+                      {selectedBooking.driverPhone}
+                    </a>
+                  )}
                 </div>
+                {selectedBooking.vehicleNumber && (
+                  <div className="pt-2 border-t border-blue-200/50 flex justify-between text-[11px]">
+                    <span className="text-slate-500">Plate Number:</span>
+                    <span className="font-mono font-bold text-slate-900">
+                      {selectedBooking.vehicleNumber}
+                    </span>
+                  </div>
+                )}
               </div>
             )}
 
-            {/* Total Fare */}
-            <div className="flex items-center justify-between p-4 rounded-2xl bg-slate-900 text-white">
-              <span className="text-xs text-slate-400">Payable Total Fare</span>
-              <span className="text-xl font-black text-amber-400">₹{selectedBooking.fare}</span>
+            {/* Total Fare & Payment Status */}
+            <div className="p-4 rounded-2xl bg-slate-900 text-white space-y-2">
+              <div className="flex justify-between items-center text-xs text-slate-400">
+                <span>Payment Status</span>
+                <span
+                  className={`font-black uppercase text-[11px] px-2 py-0.5 rounded-md ${
+                    selectedBooking.paymentStatus === "PAID"
+                      ? "bg-emerald-500 text-slate-950"
+                      : "bg-amber-500 text-slate-950"
+                  }`}
+                >
+                  {selectedBooking.paymentStatus || "PENDING"}
+                </span>
+              </div>
+              <div className="flex justify-between items-center pt-2 border-t border-slate-800">
+                <span className="text-xs text-slate-400">Final Authoritative Fare</span>
+                <span className="text-xl font-black text-amber-400">₹{selectedBooking.fare}</span>
+              </div>
             </div>
+
+            {/* Pay Now Button if completed & pending */}
+            {selectedBooking.confirmStatus.toLowerCase().includes("completed") &&
+              selectedBooking.paymentStatus !== "PAID" && (
+                <button
+                  type="button"
+                  onClick={() => {
+                    setPayModalBooking(selectedBooking);
+                    setSelectedBooking(null);
+                  }}
+                  className="w-full py-3.5 rounded-2xl bg-gradient-to-r from-amber-500 to-yellow-400 hover:from-amber-400 hover:to-yellow-300 text-slate-950 font-black text-sm shadow-lg shadow-amber-500/25 flex items-center justify-center gap-2 transition-all"
+                >
+                  <CreditCard size={16} /> Pay ₹{selectedBooking.fare} Now
+                </button>
+              )}
 
             {/* Modal Actions */}
             <div className="flex gap-2">
@@ -498,23 +710,200 @@ export const MyBookings: React.FC = () => {
               >
                 Close
               </button>
-              {selectedBooking.confirmStatus === "Pending" && (
-                <button
-                  type="button"
-                  disabled={cancellingId === selectedBooking.bookingId}
-                  onClick={() => handleCancelBooking(selectedBooking.bookingId)}
-                  className="w-full py-3 rounded-2xl bg-rose-50 text-rose-600 hover:bg-rose-100 font-bold text-xs disabled:opacity-50"
-                >
-                  {cancellingId === selectedBooking.bookingId ? "Cancelling..." : "Cancel Ride"}
-                </button>
-              )}
             </div>
-
           </div>
         </div>
       )}
 
-      {/* Auth Modal if needed */}
+      {/* Post-Ride Payment Modal */}
+      {payModalBooking && !paymentSuccessData && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-slate-950/70 backdrop-blur-sm animate-in fade-in duration-150">
+          <div className="bg-white rounded-3xl shadow-2xl border border-slate-100 max-w-md w-full p-6 space-y-6 animate-in zoom-in-95 duration-200">
+            <div className="flex items-center justify-between border-b border-slate-100 pb-4">
+              <div>
+                <span className="text-xs text-slate-400 font-bold block">
+                  Trip Completed · Checkout
+                </span>
+                <h3 className="text-lg font-black text-slate-900">
+                  Pay for Ride #{payModalBooking.bookingCode}
+                </h3>
+              </div>
+              <button
+                type="button"
+                onClick={() => setPayModalBooking(null)}
+                className="w-8 h-8 rounded-full bg-slate-100 hover:bg-slate-200 flex items-center justify-center text-slate-600"
+              >
+                <X size={16} />
+              </button>
+            </div>
+
+            {/* Fare Summary Box */}
+            <div className="p-4 rounded-2xl bg-slate-900 text-white space-y-2">
+              <div className="flex justify-between text-xs text-slate-400 font-medium">
+                <span>Trip Distance</span>
+                <span>{payModalBooking.distanceKm || 1} km</span>
+              </div>
+              <div className="flex justify-between text-xs text-slate-400 font-medium">
+                <span>Vehicle Category</span>
+                <span>{payModalBooking.vehicleType}</span>
+              </div>
+              <div className="pt-2 border-t border-slate-800 flex justify-between items-center">
+                <span className="text-xs font-bold text-amber-400 uppercase tracking-wider">
+                  Total Final Amount
+                </span>
+                <span className="text-2xl font-black text-amber-400">
+                  ₹{payModalBooking.fare}
+                </span>
+              </div>
+            </div>
+
+            {/* Payment Method Selector */}
+            <div className="space-y-3">
+              <span className="text-xs font-extrabold text-slate-700 block">
+                Choose Payment Method
+              </span>
+
+              {/* Online Payment Option */}
+              <label
+                onClick={() => setSelectedPaymentMethod("Online")}
+                className={`flex items-center justify-between p-4 rounded-2xl border-2 cursor-pointer transition-all ${
+                  selectedPaymentMethod === "Online"
+                    ? "border-amber-500 bg-amber-50/30 text-slate-950 shadow-sm"
+                    : "border-slate-200 hover:border-slate-300 text-slate-700"
+                }`}
+              >
+                <div className="flex items-center gap-3">
+                  <div className="w-10 h-10 rounded-xl bg-amber-100 text-amber-700 flex items-center justify-center font-bold">
+                    <CreditCard size={20} />
+                  </div>
+                  <div>
+                    <span className="font-extrabold text-sm block">Online Payment</span>
+                    <span className="text-xs text-slate-500">
+                      Credit/Debit Card, UPI, NetBanking
+                    </span>
+                  </div>
+                </div>
+                <input
+                  type="radio"
+                  name="payMethod"
+                  checked={selectedPaymentMethod === "Online"}
+                  onChange={() => setSelectedPaymentMethod("Online")}
+                  className="w-4 h-4 text-amber-600 focus:ring-amber-500"
+                />
+              </label>
+
+              {/* Cash Payment Option */}
+              <label
+                onClick={() => setSelectedPaymentMethod("Cash")}
+                className={`flex items-center justify-between p-4 rounded-2xl border-2 cursor-pointer transition-all ${
+                  selectedPaymentMethod === "Cash"
+                    ? "border-amber-500 bg-amber-50/30 text-slate-950 shadow-sm"
+                    : "border-slate-200 hover:border-slate-300 text-slate-700"
+                }`}
+              >
+                <div className="flex items-center gap-3">
+                  <div className="w-10 h-10 rounded-xl bg-emerald-100 text-emerald-700 flex items-center justify-center font-bold">
+                    <Banknote size={20} />
+                  </div>
+                  <div>
+                    <span className="font-extrabold text-sm block">Cash Payment</span>
+                    <span className="text-xs text-slate-500">Pay cash directly to chauffeur</span>
+                  </div>
+                </div>
+                <input
+                  type="radio"
+                  name="payMethod"
+                  checked={selectedPaymentMethod === "Cash"}
+                  onChange={() => setSelectedPaymentMethod("Cash")}
+                  className="w-4 h-4 text-amber-600 focus:ring-amber-500"
+                />
+              </label>
+            </div>
+
+            {/* Pay Action Button */}
+            <button
+              type="button"
+              disabled={processingPayment}
+              onClick={handleProcessPayment}
+              className="w-full py-4 rounded-2xl bg-gradient-to-r from-amber-500 to-yellow-400 hover:from-amber-400 hover:to-yellow-300 text-slate-950 font-black text-base shadow-lg shadow-amber-500/25 flex items-center justify-center gap-2 hover:-translate-y-0.5 active:translate-y-0 transition-all disabled:opacity-50"
+            >
+              {processingPayment ? (
+                <>
+                  <Loader2 className="animate-spin" size={18} />
+                  Verifying Transaction...
+                </>
+              ) : selectedPaymentMethod === "Online" ? (
+                <>
+                  <ShieldCheck size={18} /> Pay ₹{payModalBooking.fare} Securely
+                </>
+              ) : (
+                <>
+                  <Banknote size={18} /> Confirm Cash Payment
+                </>
+              )}
+            </button>
+          </div>
+        </div>
+      )}
+
+      {/* Payment Success Receipt Modal */}
+      {paymentSuccessData && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-slate-950/70 backdrop-blur-sm animate-in fade-in duration-150">
+          <div className="bg-white rounded-3xl shadow-2xl border border-slate-100 max-w-md w-full p-6 text-center space-y-5 animate-in zoom-in-95 duration-200">
+            <div className="w-16 h-16 rounded-full bg-emerald-100 text-emerald-600 flex items-center justify-center mx-auto shadow-lg shadow-emerald-500/20">
+              <CheckCircle2 size={36} className="stroke-[2.5]" />
+            </div>
+
+            <div>
+              <span className="px-3 py-1 rounded-full bg-emerald-100 text-emerald-800 font-bold text-xs uppercase tracking-wider">
+                Payment Verified
+              </span>
+              <h3 className="text-xl font-black text-slate-900 mt-2">Payment Successful!</h3>
+              <p className="text-xs text-slate-500 mt-1">
+                Your ride payment has been confirmed and recorded in the database.
+              </p>
+            </div>
+
+            <div className="p-4 rounded-2xl bg-slate-50 border border-slate-200 text-left text-xs space-y-2.5 font-semibold text-slate-700">
+              <div className="flex justify-between py-1 border-b border-slate-200/60">
+                <span className="text-slate-400">Booking Code:</span>
+                <span className="font-mono font-bold text-slate-900">
+                  {paymentSuccessData.bookingCode}
+                </span>
+              </div>
+              <div className="flex justify-between py-1 border-b border-slate-200/60">
+                <span className="text-slate-400">Amount Paid:</span>
+                <span className="font-black text-emerald-700 text-sm">
+                  ₹{paymentSuccessData.amount}
+                </span>
+              </div>
+              <div className="flex justify-between py-1 border-b border-slate-200/60">
+                <span className="text-slate-400">Payment Mode:</span>
+                <span className="font-bold text-slate-900">{paymentSuccessData.method}</span>
+              </div>
+              <div className="flex justify-between py-1">
+                <span className="text-slate-400">Transaction Ref:</span>
+                <span className="font-mono text-[10px] text-slate-800 truncate max-w-[160px]">
+                  {paymentSuccessData.txnId}
+                </span>
+              </div>
+            </div>
+
+            <button
+              type="button"
+              onClick={() => {
+                setPaymentSuccessData(null);
+                setPayModalBooking(null);
+              }}
+              className="w-full py-3.5 rounded-2xl bg-slate-900 hover:bg-slate-800 text-white font-bold text-sm shadow-md transition-all"
+            >
+              Done & View Bookings
+            </button>
+          </div>
+        </div>
+      )}
+
+      {/* Auth Modal */}
       <AuthModal
         isOpen={authModalOpen}
         onClose={() => setAuthModalOpen(false)}

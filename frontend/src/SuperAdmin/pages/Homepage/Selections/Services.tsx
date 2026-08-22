@@ -12,8 +12,9 @@ const services = [
   { 
     img: service1, // ✅ string path
     title: "Fleet Management System", 
-    description: "The Fleet Management division of the Grace Cabs today manages Fleet of approximate 400 Vehicles, which comprises of 150 Company owned fleet and 250 associates vehicle. These fleets include 135 Sedan Cabs, 75 SUV, 130 LMV and 60 Buses. Our fleet is Equipped with real-time GPS Tracking, Communication and Information System. Our Constant endeavour in pursuit of excellence is aimed." 
+    description: "The Fleet Management division of EasyRide today manages Fleet of approximate 400 Vehicles, which comprises of 150 Company owned fleet and 250 associates vehicle. These fleets include 135 Sedan Cabs, 75 SUV, 130 LMV and 60 Buses. Our fleet is Equipped with real-time GPS Tracking, Communication and Information System. Our Constant endeavour in pursuit of excellence is aimed." 
   },
+
   { 
     img: service2, 
     title: "Rent A Car", 

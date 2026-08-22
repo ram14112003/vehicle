@@ -38,10 +38,10 @@ const Header: React.FC = () => {
           <div className="flex items-center space-x-2 mb-1 sm:mb-0">
             <Mail size={14} className="text-green-600" />
             <a
-              href="mailto:traveldesk@gracecabs.com"
+              href="mailto:support@easyride.in"
               className="hover:text-green-600 text-[13px]"
             >
-              traveldesk@gracecabs.com
+              support@easyride.in
             </a>
           </div>
 
@@ -70,15 +70,11 @@ const Header: React.FC = () => {
         <div className="flex items-center justify-between">
           {/* Logo + Name */}
           <div className="flex items-center space-x-2">
-            <img
-              src={gracelogo}
-              alt="Grace Cab Logo"
-              className="pr-8 w-24 h-15 object-contain"
-            />
-            <h1 className="text-xl font-bold text-gray-800">
-              GRACE <span className="text-green-600">CABS</span>
+            <h1 className="text-2xl font-black text-gray-800 tracking-tight">
+              Easy<span className="text-green-600">Ride</span>
             </h1>
           </div>
+
 
           {/* Desktop Menu */}
           <nav className="hidden md:flex items-center space-x-6">
@@ -149,13 +145,13 @@ const Header: React.FC = () => {
               className={`fixed top-0 left-0 right-0 bg-white text-black transform transition-transform duration-300 ease-in-out shadow-lg ${isOpen ? "translate-x-0" : "-translate-x-full"
                 }`}
             >
-              {/* Logo + GRACE CABS */}
+              {/* Logo + EasyRide */}
               <div className="flex items-center justify-start p-4 border-b border-gray-200 space-x-3">
-                <img src={gracelogo} alt="Logo" className="w-20 h-auto object-contain" />
                 <h1 className="text-xl font-extrabold text-black">
-                  GRACE <span className="text-green-600">CABS</span>
+                  Easy<span className="text-green-600">Ride</span>
                 </h1>
               </div>
+
 
               {/* Close button */}
               <div className="absolute top-4 right-4">

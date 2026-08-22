@@ -7,7 +7,8 @@ import {
   faUsers,
   faMoneyBillWave,
   faSignOutAlt,
-  faShieldAlt
+  faShieldAlt,
+  faIdCard
 } from '@fortawesome/free-solid-svg-icons';
 import { NavLink, useNavigate } from 'react-router-dom';
 
@@ -30,6 +31,11 @@ const NAV_ITEMS: NavItem[] = [
     icon: faClipboardList,
   },
   {
+    label: 'Drivers',
+    path: '/drivers/list',
+    icon: faIdCard,
+  },
+  {
     label: 'Vehicles',
     path: '/vehicle/vehicletype/list',
     icon: faCar,
@@ -45,6 +51,7 @@ const NAV_ITEMS: NavItem[] = [
     icon: faMoneyBillWave,
   },
 ];
+
 
 const Sidebar: React.FC = () => {
   const navigate = useNavigate();
@@ -63,8 +70,9 @@ const Sidebar: React.FC = () => {
           <FontAwesomeIcon icon={faCar} className="text-lg" />
         </div>
         <div>
-          <h2 className="text-base font-black text-white tracking-wide">Grace Cabs</h2>
+          <h2 className="text-base font-black text-white tracking-wide">EasyRide</h2>
           <div className="flex items-center gap-1.5 mt-0.5">
+
             <span className="w-2 h-2 rounded-full bg-emerald-400 animate-pulse"></span>
             <span className="text-[11px] font-bold text-slate-400 uppercase tracking-wider">Admin Portal</span>
           </div>

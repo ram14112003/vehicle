@@ -130,9 +130,10 @@ export default function Footer() {
 
     {/* Instagram */}
     <a
-      href="https://www.instagram.com/gracecabspvt/"
+      href="https://www.instagram.com/easyride/"
       target="_blank"
       rel="noopener noreferrer"
+
       className="transform transition-transform duration-300 hover:scale-110 hover:-rotate-3"
     >
       <img
@@ -285,13 +286,14 @@ export default function Footer() {
       <div className="flex items-center gap-2 mt-1">
         <img src={IconMail} className="w-6 h-6" />
         <a
-          href="mailto:traveledesk@gracecabs.com"
+          href="mailto:support@easyride.in"
           className="hover:text-yellow-300 transition tab-small-text"
         >
-          traveledesk@gracecabs.com
+          support@easyride.in
         </a>
       </div>
     </div>
+
 
    {/* CAB BOOKING APP */}
 <div
@@ -310,10 +312,11 @@ export default function Footer() {
 
   {/* ⭐ Google Play Link */}
   <a
-    href="https://play.google.com/store/apps/details?id=com.gracecabs.cabs"
+    href="https://play.google.com/store/apps/details?id=com.easyride.cabs"
     target="_blank"
     rel="noopener noreferrer"
   >
+
     <img
       src={PlayStoreIcon}
       className="
@@ -423,8 +426,9 @@ export default function Footer() {
 
 {/* COPY RIGHT SECTION */}
        <div className="text-center text-[12px] sm:text-[14px] opacity-80">
-  © {new Date().getFullYear()} GraceCabs.in. All Rights Reserved.
+  © {new Date().getFullYear()} EasyRide. All Rights Reserved.
 </div>
+
 
       </div>
     </div>

@@ -18,13 +18,14 @@ const WhyChoose: React.FC = () => {
         {/* TOP HEADING */}
         <div className="text-center mb-12">
           <h4 className="text-[#49386D] tracking-wider font-semibold uppercase text-sm">
-            About Grace Cabs
+            About EasyRide
           </h4>
 
           <h2 className="text-3xl md:text-5xl font-bold text-[#0D0C22] mt-2">
-            Why Choose Grace Cabs
+            Why Choose EasyRide
           </h2>
         </div>
+
 
         {/* MAIN GRID */}
 <div className="hidden lg:grid grid-cols-3 gap-12">

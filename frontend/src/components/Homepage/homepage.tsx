@@ -301,7 +301,7 @@ export const HomePage: React.FC = () => {
           <div className="text-center space-y-3 mb-14">
             <span className="text-xs font-black uppercase tracking-widest text-amber-400">Simple Process</span>
             <h2 className="text-2xl sm:text-4xl font-black tracking-tight text-white">
-              How to Book Your Grace Cab in 3 Steps
+              How to Book Your EasyRide in 3 Steps
             </h2>
             <p className="text-sm text-slate-400 max-w-xl mx-auto">
               No complicated screens, repeated details, or confusing navigation.
@@ -346,12 +346,12 @@ export const HomePage: React.FC = () => {
         </div>
       </section>
 
-      {/* ================= WHY CHOOSE GRACE CABS ================= */}
+      {/* ================= WHY CHOOSE EASYRIDE ================= */}
       <section id="why-us" className="py-20 px-4 sm:px-6 lg:px-8 max-w-7xl mx-auto w-full">
         <div className="grid grid-cols-1 lg:grid-cols-12 gap-12 items-center">
           
           <div className="lg:col-span-5 space-y-6">
-            <span className="text-xs font-black uppercase tracking-widest text-amber-600">The Grace Cabs Advantage</span>
+            <span className="text-xs font-black uppercase tracking-widest text-amber-600">The EasyRide Advantage</span>
             <h2 className="text-2xl sm:text-4xl font-black text-slate-900 tracking-tight leading-tight">
               Trusted by 10,000+ Daily Commuters & Top Corporates
             </h2>
@@ -366,11 +366,12 @@ export const HomePage: React.FC = () => {
                 ))}
               </div>
               <p className="text-xs font-bold text-slate-800 italic">
-                "Grace Cabs transformed our daily airport and corporate transfers. Booking takes less than a minute and cars are always spotless."
+                "EasyRide transformed our daily airport and corporate transfers. Booking takes less than a minute and cars are always spotless."
               </p>
               <span className="text-[11px] font-bold text-slate-500 block">— Corporate Commuter, Chennai</span>
             </div>
           </div>
+
 
           <div className="lg:col-span-7 grid grid-cols-1 sm:grid-cols-2 gap-5">
             {WHY_CHOOSE_ITEMS.map((item) => {

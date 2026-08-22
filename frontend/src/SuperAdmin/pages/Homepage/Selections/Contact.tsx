@@ -52,13 +52,14 @@ const Contact: React.FC = () => (
         <div className="text-center">
           <Mail className="w-12 h-12 text-green-600 mx-auto mb-4 animate-bounce" />
           <h4 className="font-semibold text-gray-800 mb-2">EMAIL</h4>
-          <p className="text-gray-600">traveldesk@gracecabs.com </p>
+          <p className="text-gray-600">support@easyride.in </p>
         </div>
       </div>
 
       <div className="rounded-lg overflow-hidden shadow-lg">
         <iframe
-          title="Grace Cabs Location Map"
+          title="EasyRide Location Map"
+
           src="https://www.google.com/maps/embed?pb=!1m18!1m12!1m3!1d3888.2!2d80.2447!3d12.8985!2m3!1f0!2f0!3f0!3m2!1i1024!2i768!4f13.1!3m3!1m2!1s0x3a525d8f0000000f%3A0x1234567890abcdef!2sPerumbakkam%2C%20Chennai%2C%20Tamil%20Nadu%20600100!5e0!3m2!1sen!2sin!4v1696931503000!5m2!1sen!2sin"
           width="100%"
           height="450"

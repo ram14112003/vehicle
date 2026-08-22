@@ -29,7 +29,8 @@ const CancelReservation: React.FC = () => {
         <div className="bg-white rounded-lg shadow-sm p-5 mb-5">
           <p className="text-gray-700 leading-relaxed text-sm md:text-base">
             We understand that plans can change. Below are our cancellation and refund policies to help you
-            understand the terms when canceling your reservation with Grace Travel.
+            understand the terms when canceling your reservation with EasyRide.
+
           </p>
         </div>
 

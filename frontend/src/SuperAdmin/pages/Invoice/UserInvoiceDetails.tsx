@@ -189,9 +189,10 @@ return (
       <div className="flex justify-between items-center mb-4">
           <img
       src={logo}
-      alt="Grace Cabs"
+      alt="EasyRide"
       className="h-10 object-contain"
     />
+
         <h2 className="text-xl font-bold">Invoices</h2>
         <div className="text-right text-gray-700 font-medium">
           Welcome,{" "}

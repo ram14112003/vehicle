@@ -12,9 +12,10 @@ const Testimonials: React.FC = () => {
       author: "Pradeep",
     },
     {
-      text: "I would like to say it is exceptional service provided by Grace Cab. Keep up the good work.",
+      text: "I would like to say it is exceptional service provided by EasyRide. Keep up the good work.",
       author: "John",
     },
+
   ];
 
   const [active, setActive] = useState(0);

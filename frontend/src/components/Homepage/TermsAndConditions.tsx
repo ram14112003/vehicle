@@ -34,16 +34,16 @@ const TermsAndConditions: React.FC = () => {
         {/* Introduction */}
         <div className="bg-white rounded-lg shadow-sm p-6 mb-6">
           <p className="text-gray-700 leading-relaxed mb-4">
-            The information contained in this website is for general information purposes only. The information is provided by Grace Cabs and while we endeavor to keep the information up to date and correct, we make no representations or warranties of any kind, express or implied, about the completeness, accuracy, reliability, suitability or availability with respect to the website or the information, products, services, or related graphics contained on the website for any purpose. Any reliance you place on such information is therefore strictly at your own risk.
+            The information contained in this website is for general information purposes only. The information is provided by EasyRide and while we endeavor to keep the information up to date and correct, we make no representations or warranties of any kind, express or implied, about the completeness, accuracy, reliability, suitability or availability with respect to the website or the information, products, services, or related graphics contained on the website for any purpose. Any reliance you place on such information is therefore strictly at your own risk.
           </p>
           <p className="text-gray-700 leading-relaxed mb-4">
             In no event will we be liable for any loss or damage including without limitation, indirect or consequential loss or damage, or any loss or damage whatsoever arising from loss of data or profits arising out of, or in connection with, the use of this website.
           </p>
           <p className="text-gray-700 leading-relaxed mb-4">
-            Through this website you are able to link to other websites which are not under the control of Grace Cabs. We have no control over the nature, content and availability of those sites. The inclusion of any links does not necessarily imply a recommendation or endorse the views expressed within them.
+            Through this website you are able to link to other websites which are not under the control of EasyRide. We have no control over the nature, content and availability of those sites. The inclusion of any links does not necessarily imply a recommendation or endorse the views expressed within them.
           </p>
           <p className="text-gray-700 leading-relaxed">
-            Every effort is made to keep the website up and running smoothly. However, Grace Cabs takes no responsibility for, and will not be liable for, the website being temporarily unavailable due to technical issues beyond our control.
+            Every effort is made to keep the website up and running smoothly. However, EasyRide takes no responsibility for, and will not be liable for, the website being temporarily unavailable due to technical issues beyond our control.
           </p>
         </div>
 
@@ -54,7 +54,8 @@ const TermsAndConditions: React.FC = () => {
             In this document, the following definitions are to be used and so interpreted, except for when the context implies other meanings:
           </p>
           <ul className="space-y-2 text-gray-700">
-            <li><strong>Company</strong> will refer to Grace Cabs.</li>
+            <li><strong>Company</strong> will refer to EasyRide.</li>
+
             <li><strong>Employee</strong> will refer to any of the Company's employees including, but not limited to, a driver, a member of the sales and support team, a technician or a member of the administration board.</li>
             <li><strong>Hirer or Client</strong> will refer to the person who signed the contract and who is responsible to pay the fees.</li>
             <li><strong>Contract</strong> will refer to the legal agreement between the Company and the Hirer that specifies all aspects of the service.</li>
@@ -201,8 +202,9 @@ const TermsAndConditions: React.FC = () => {
             <div className="mt-6 space-y-2">
               <p>• Please do not insist and/or encourage the driver for overspeeding, jumping traffic signals, driving in wrong lane/side, overtaking, offroading, race/competition etc.</p>
               <p>• We strictly recommend NOT to leave any cash, valuables, precious items like laptops, mobiles, wallets, handbags, luggage etc in the vehicle.</p>
-              <p>• Grace Cabs or any driver engaged through it will NOT be responsible for any loss, theft or damage.</p>
+              <p>• EasyRide or any driver engaged through it will NOT be responsible for any loss, theft or damage.</p>
               <p>• Please insist the driver to display the company ID card every time the driver reports for your booking.</p>
+
               <p>• We accept payments ONLY in cash and should be made by the customer directly to the driver at the end of the booking.</p>
               <p>• Management is not responsible in case of any incidents if you hire a driver directly without office intimation.</p>
               <p>• Please do not support, insist and/or encourage the driver to drive the vehicle under any influence of alcohol, drugs etc.</p>

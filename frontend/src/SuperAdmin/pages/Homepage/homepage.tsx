@@ -59,7 +59,7 @@ const GraceTravelsHome: React.FC = () => {
     {
       name: 'John Smith',
       role: 'Business Owner',
-      text: 'Excellent service and professional drivers. Grace Cabs has been my go-to choice for all business trips.',
+      text: 'Excellent service and professional drivers. EasyRide has been my go-to choice for all business trips.',
       image: 'https://images.unsplash.com/photo-1507003211169-0a1dd7228f2d?w=100&h=100&fit=crop'
     },
     {
@@ -103,18 +103,9 @@ const GraceTravelsHome: React.FC = () => {
         <div className="container mx-auto px-4 py-4">
           <div className="flex justify-between items-center">
             <div className="flex items-center space-x-3">
-              <div className="relative w-12 h-12">
-                <div className="absolute inset-0 bg-gray-700 rounded-full"></div>
-                <div className="absolute inset-2 bg-white rounded-full flex items-center justify-center">
-                  <svg className="w-6 h-6 text-gray-700" fill="currentColor" viewBox="0 0 24 24">
-                    <path d="M18.92 6.01C18.72 5.42 18.16 5 17.5 5h-11c-.66 0-1.21.42-1.42 1.01L3 12v8c0 .55.45 1 1 1h1c.55 0 1-.45 1-1v-1h12v1c0 .55.45 1 1 1h1c.55 0 1-.45 1-1v-8l-2.08-5.99zM6.5 16c-.83 0-1.5-.67-1.5-1.5S5.67 13 6.5 13s1.5.67 1.5 1.5S7.33 16 6.5 16zm11 0c-.83 0-1.5-.67-1.5-1.5s.67-1.5 1.5-1.5 1.5.67 1.5 1.5-.67 1.5-1.5 1.5zM5 11l1.5-4.5h11L19 11H5z"/>
-                  </svg>
-                </div>
-              </div>
-              <div className="text-2xl font-bold">
-                <span className="text-gray-700">GRACE </span>
-                <span className="text-yellow-500">T</span>
-                <span className="text-gray-700">RAVELS</span>
+              <div className="text-2xl font-black">
+                <span className="text-gray-800">Easy</span>
+                <span className="text-amber-500">Ride</span>
               </div>
             </div>
             <div className="flex items-center space-x-6 text-sm text-gray-600">
@@ -124,7 +115,7 @@ const GraceTravelsHome: React.FC = () => {
               </div>
               <div className="flex items-center space-x-2">
                 <Mail className="w-4 h-4" />
-                <span>Support@gracecabs.in</span>
+                <span>support@easyride.in</span>
               </div>
             </div>
           </div>
@@ -143,12 +134,13 @@ const GraceTravelsHome: React.FC = () => {
                 THIS IS WHAT YOU WERE LOOKING FOR!
               </div>
               <p className="text-gray-600 mb-8 leading-relaxed">
-                Grace Cabs offer a wide range of makes and models for you to choose from at all our service locations.
+                EasyRide offers a wide range of makes and models for you to choose from at all our service locations.
               </p>
               <button className="bg-green-500 hover:bg-green-600 text-white px-8 py-3 rounded font-semibold transition-all duration-300 hover:shadow-lg">
                 BOOK NOW
               </button>
             </div>
+
             
        <div className="relative h-96"> 
               {/* Car 1 - Top right - Toyota Corolla */} 
@@ -292,7 +284,7 @@ const GraceTravelsHome: React.FC = () => {
             <div>
               <h2 className="text-4xl font-bold text-gray-800 mb-2">Our Cars</h2>
               <p className="text-gray-600">
-                Easy & convenient self-driven cars are available from Grace Cabs on daily, weekly & monthly basis.
+                Easy & convenient self-driven cars are available from EasyRide on daily, weekly & monthly basis.
               </p>
             </div>
             <div className="flex space-x-2">
@@ -444,7 +436,7 @@ const GraceTravelsHome: React.FC = () => {
             <div>
               <h3 className="text-2xl font-bold mb-4">About us</h3>
               <p className="text-gray-400 leading-relaxed text-sm">
-                Grace Cabs is an affordable Car travels and car rentals service provider in Chennai. Grace Cabs in Chennai is a highly professional company who provide reliable cars for your perfect hours where high petrol pricing makes owning cars less practical. We carry all trips in Chennai or elsewhere in Tamil Nadu. We have a skilled and experienced team of drivers who are friendly, caring and knowledgeable about the places they take you on. We will make your family and official trips. We specialize in renting and providing cars for hire in Chennai, Tamil Nadu.
+                EasyRide is an affordable Car travels and car rentals service provider in Chennai. EasyRide in Chennai is a highly professional company who provide reliable cars for your perfect hours where high petrol pricing makes owning cars less practical. We carry all trips in Chennai or elsewhere in Tamil Nadu. We have a skilled and experienced team of drivers who are friendly, caring and knowledgeable about the places they take you on. We will make your family and official trips. We specialize in renting and providing cars for hire in Chennai, Tamil Nadu.
               </p>
             </div>
             <div>
@@ -460,7 +452,7 @@ const GraceTravelsHome: React.FC = () => {
                 </p>
                 <p className="flex items-center space-x-2">
                   <Mail className="w-4 h-4" />
-                  <span>Email: support@Gracecabs.in</span>
+                  <span>Email: support@easyride.in</span>
                 </p>
               </div>
             </div>
@@ -479,11 +471,12 @@ const GraceTravelsHome: React.FC = () => {
               </a>
             </div>
             <div className="text-center text-gray-500 text-xs">
-              ©2025 © Gracecabs.in. All Rights Reserved. Page loaded in 0.001 seconds.
+              ©2025 © EasyRide. All Rights Reserved. Page loaded in 0.001 seconds.
             </div>
           </div>
         </div>
       </footer>
+
 
     </div>
   );

@@ -1,6 +1,7 @@
 {
-  "short_name": "React App",
-  "name": "Create React App Sample",
+  "short_name": "EasyRide",
+  "name": "EasyRide Cab Booking",
+
   "icons": [
     {
       "src": "favicon1.jpeg",

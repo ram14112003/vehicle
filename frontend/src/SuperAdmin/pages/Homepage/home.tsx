@@ -81,9 +81,10 @@ const GraceCab: React.FC = () => {
                 className={`hero-text text-white opacity-0 transform translate-x-6 animate-slideRight`}
                 style={{ ...delay(850) }}
               >
-                Grace Cab offers a wide range of makes and models across our
+                EasyRide offers a wide range of makes and models across our
                 service locations. Choose comfort, style, and safety — all at
                 competitive prices.
+
               </p>
             </div>
           </div>

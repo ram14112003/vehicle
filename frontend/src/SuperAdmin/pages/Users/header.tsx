@@ -104,7 +104,7 @@ const TravelHeader: React.FC = () => {
             </span>
             <span className="flex items-center">
               <span className="mr-1">✉️</span>
-              <span className="hidden lg:inline">traveledesk@gracecabs.com</span>
+              <span className="hidden lg:inline">support@easyride.in</span>
               <span className="lg:hidden">Contact</span>
             </span>
           </div>
@@ -139,9 +139,10 @@ const TravelHeader: React.FC = () => {
               className="h-8 w-8 sm:h-10 sm:w-10 lg:h-11 lg:w-12 rounded-full mr-2"
             />
             <span className="text-lg sm:text-2xl lg:text-3xl font-medium text-gray-800 tracking-wide">
-              GRACE<span className="text-yellow-500 font-bold">C</span>ABS
+              EASY<span className="text-yellow-500 font-bold">R</span>IDE
             </span>
           </div>
+
 
           {/* Desktop Menu - Hidden on mobile/tablet */}
           <ul className="hidden xl:flex space-x-4 2xl:space-x-6 text-gray-700 font-medium text-sm">

@@ -174,13 +174,14 @@ export default function Footer() {
       <div className="flex items-center gap-2 mt-1">
         <img src={IconMail} className="w-6 h-6" />
         <a
-          href="mailto:traveledesk@gracecabs.com"
+          href="mailto:support@easyride.in"
           className="hover:text-yellow-300 transition tab-small-text"
         >
-          traveledesk@gracecabs.com
+          support@easyride.in
         </a>
       </div>
     </div>
+
 
     {/* CAB BOOKING APP */}
     <div className="flex flex-col text-center md:text-left items-center md:items-start gap-1 w-full lg:pl-40">
@@ -270,8 +271,9 @@ export default function Footer() {
 
 {/* COPY RIGHT SECTION */}
        <div className="text-center text-[12px] sm:text-[14px] opacity-80">
-  © {new Date().getFullYear()} GraceCabs.in. All Rights Reserved.
+  © {new Date().getFullYear()} EasyRide. All Rights Reserved.
 </div>
+
 
       </div>
     </div>

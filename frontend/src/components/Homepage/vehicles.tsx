@@ -93,12 +93,13 @@ export default function PremiumVehicles() {
     </h2>
 
     <p className="text-gray-700 mt-6 text-lg md:text-xl leading-relaxed max-w-3xl mx-auto">
-      Grace Cab offers a wide range of makes and models across our service locations.
+      EasyRide offers a wide range of makes and models across our service locations.
       Choose comfort, style, and safety — all at competitive prices.
     </p>
   </div>
 
 </div> */}
+
 
 
     </div>

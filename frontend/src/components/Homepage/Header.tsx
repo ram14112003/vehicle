@@ -135,7 +135,7 @@ return (
 
    {/* MAIL */}
 <a
-  href="mailto:traveldesk@gracecabs.com"
+  href="mailto:support@easyride.in"
   className="flex items-center gap-1"
 >
   <img
@@ -144,9 +144,10 @@ return (
     alt="mail"
   />
   <span className="text-[#221C84] yb-text whitespace-nowrap font-bold">
-    traveldesk@gracecabs.com
+    support@easyride.in
   </span>
 </a>
+
 
 
   </div>
@@ -458,9 +459,10 @@ return (
       <div className="flex items-center gap-3">
         <img src={MailIcon} className="w-6 h-6" />
         <span className="text-white font-semibold text-[16px]">
-          traveldesk@gracecabs.com
+          support@easyride.in
         </span>
       </div>
+
 <button
   onClick={() => {
     navigate("/adminlogin");
@@ -655,9 +657,10 @@ backgroundPosition: "left -80px top",  // ⭐ shifts image to left
  <div className="flex items-center gap-2 whitespace-nowrap">
   <img src={MailIcon} className="w-3 h-3" />
   <span className="text-white text-[13px] font-medium leading-none">
-    traveldesk@gracecabs.com
+    support@easyride.in
   </span>
 </div>
+
 <button
     onClick={() => {
       navigate("/adminlogin");

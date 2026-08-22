@@ -50,7 +50,7 @@ export const Footer: React.FC = () => {
                 <Car className="text-slate-950 w-6 h-6" />
               </div>
               <span className="text-2xl font-black text-white tracking-tight">
-                GRACE<span className="text-amber-500">CABS</span>
+                Easy<span className="text-amber-500">Ride</span>
               </span>
             </Link>
             <p className="text-sm text-slate-400 leading-relaxed max-w-sm">
@@ -61,9 +61,9 @@ export const Footer: React.FC = () => {
                 <Phone size={16} className="text-amber-500" />
                 <span>+91 98417 22675</span>
               </a>
-              <a href="mailto:traveldesk@gracecabs.com" className="flex items-center gap-3 text-slate-300 hover:text-amber-400 transition-colors">
+              <a href="mailto:support@easyride.in" className="flex items-center gap-3 text-slate-300 hover:text-amber-400 transition-colors">
                 <Mail size={16} className="text-amber-500" />
-                <span>traveldesk@gracecabs.com</span>
+                <span>support@easyride.in</span>
               </a>
               <div className="flex items-center gap-3 text-slate-300">
                 <MapPin size={16} className="text-amber-500" />
@@ -132,11 +132,12 @@ export const Footer: React.FC = () => {
 
         {/* Bottom Bar */}
         <div className="pt-8 flex flex-col sm:flex-row items-center justify-between gap-4 text-xs text-slate-500">
-          <p>© {new Date().getFullYear()} Grace Cabs. All rights reserved.</p>
+          <p>© {new Date().getFullYear()} EasyRide. All rights reserved.</p>
           <p className="flex items-center gap-4">
             <span>Built with precision for fast, seamless cab bookings.</span>
           </p>
         </div>
+
 
       </div>
     </footer>

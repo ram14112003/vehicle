@@ -100,8 +100,9 @@ const Header: React.FC = () => {
       <ConfirmModal
         isOpen={showLogoutConfirm}
         title="Sign Out?"
-        description="Are you sure you want to log out of the Grace Cabs Admin Portal?"
+        description="Are you sure you want to log out of the EasyRide Admin Portal?"
         confirmText="Yes, Sign Out"
+
         cancelText="Stay Logged In"
         variant="danger"
         isLoading={false}

@@ -151,14 +151,14 @@ const About = () => {
             </div>
             <div className="about-txt space-y-4 text-gray-800">
               <h2 className="text-3xl md:text-4xl lg:text-5xl font-bold leading-tight text-[#275981]">
-                Grace <span className="text-green-600">Cabs</span>
+                Easy <span className="text-green-600">Ride</span>
               </h2>
               <div className="w-20 h-1 bg-green-600"></div>
               <p className="text-lg md:text-xl font-semibold text-green-600">
                 Affordable car travels and rentals in Chennai
               </p>
               <p className="text-gray-700 leading-relaxed">
-                Grace Cabs is an affordable Car travels and car rentals service provider in Chennai, Tamil Nadu. With a variety of the latest cars and high petrol-efficiency cabs, we are your perfect choice when it comes to renting or hiring cars for pleasant vacations, tours and happy trips in Chennai or elsewhere in Tamil Nadu.
+                EasyRide is an affordable Car travels and car rentals service provider in Chennai, Tamil Nadu. With a variety of the latest cars and high petrol-efficiency cabs, we are your perfect choice when it comes to renting or hiring cars for pleasant vacations, tours and happy trips in Chennai or elsewhere in Tamil Nadu.
               </p>
               <p className="text-gray-700 leading-relaxed">
                 We have a skilled and experienced team of drivers who are friendly, caring and professional, making them the perfect first-class drivers for your family and official trips. We specialize in renting and providing cars for hire in Chennai, Tamil Nadu.
@@ -184,10 +184,10 @@ const About = () => {
               </div>
               <div className="space-y-4 text-gray-700 leading-relaxed">
                 <p className="italic text-gray-800 border-l-4 border-green-500 pl-4 bg-green-50 py-2">
-                  On behalf of the entire team at Grace Cabs Private Limited, I am thrilled to welcome you to our world of exceptional travel experiences. We are a premier travel company dedicated to crafting unforgettable journeys tailored to your unique preferences and desires.
+                  On behalf of the entire team at EasyRide Private Limited, I am thrilled to welcome you to our world of exceptional travel experiences. We are a premier travel company dedicated to crafting unforgettable journeys tailored to your unique preferences and desires.
                 </p>
                 <p>
-                  Grace Cabs Private Limited is the leading provider of premium integrated end-to-end transportation solutions for the corporate sector across the metro cities in Southern India. Since its establishment in 2003, Grace Cabs has been committed to providing unparalleled travel arrangements that cater to the individual needs and preferences of our clients.
+                  EasyRide Private Limited is the leading provider of premium integrated end-to-end transportation solutions for the corporate sector across the metro cities in Southern India. Since its establishment in 2003, EasyRide has been committed to providing unparalleled travel arrangements that cater to the individual needs and preferences of our clients.
                 </p>
                 <p>
                   We provide a wide range of services covering most needs of corporates — car rentals, business transport solutions, long term rentals, and daily & monthly packages. With passenger safety and comfort as our top priorities, we have invested in technology and provide several unique value-added offerings. Some of these include real-time tracking and updates on cab booking, GPS based trip tracking, transparent billing, user friendly App and 24 X 7 customer service.
@@ -202,12 +202,13 @@ const About = () => {
                   <p className="italic text-gray-600">Sincerely,</p>
                   <p className="font-bold mt-2" style={{ color: '#275981' }}>Dr. Robert Jayakumar</p>
                   <p className="text-sm text-gray-600">Managing Director</p>
-                  <p className="text-xs text-gray-500">Grace Cabs Private Limited</p>
+                  <p className="text-xs text-gray-500">EasyRide Private Limited</p>
                 </div>
               </div>
             </div>
           </div>
         </div>
+
       </section>
 
       {/* Vision, Mission and Values Section */}

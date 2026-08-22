@@ -32,14 +32,14 @@ const PrivacyPolicy: React.FC = () => {
         <div className="bg-white rounded-lg shadow-sm p-6 mb-6">
           <div className="space-y-6 text-gray-700 leading-relaxed">
             <p>
-              Grace Cabs respects your privacy and recognizes the need to protect the personally identifiable information you share with us.
+              EasyRide respects your privacy and recognizes the need to protect the personally identifiable information you share with us.
               We follow appropriate standards when it comes to protecting your privacy on our websites.
             </p>
 
             <p>
               There are times when we may collect personal information from you such as name, physical address or telephone number.
               It is our intent to inform you before we do that and explain how the information will be used.
-              If you choose not to provide the information we request, you can still visit the Grace Cabs website, 
+              If you choose not to provide the information we request, you can still visit the EasyRide website, 
               but some services may not be accessible.
             </p>
           </div>
@@ -50,7 +50,7 @@ const PrivacyPolicy: React.FC = () => {
           <h3 className="text-2xl font-bold text-teal-600 mb-4">Information Protection</h3>
           <div className="space-y-4 text-gray-700 leading-relaxed">
             <p>
-              Grace Cabs will not sell, trade, or disclose any information derived from the registration or use of
+              EasyRide will not sell, trade, or disclose any information derived from the registration or use of
               any online service (including names and addresses) without the consent of the user or customer,
               unless required by law.
             </p>
@@ -66,7 +66,7 @@ const PrivacyPolicy: React.FC = () => {
           <h3 className="text-2xl font-bold text-teal-600 mb-4">Security Measures</h3>
           <div className="space-y-4 text-gray-700 leading-relaxed">
             <p>
-              Grace Cabs will continue to enhance our security procedures as new technology becomes available.
+              EasyRide will continue to enhance our security procedures as new technology becomes available.
               If our privacy policy changes, it will be posted here with a new effective date.
             </p>
             <p>
@@ -81,7 +81,7 @@ const PrivacyPolicy: React.FC = () => {
 
         <section className="bg-white rounded-lg shadow-sm p-6 mb-6">
           <h3 className="text-2xl font-bold text-teal-600 mb-4">
-            <strong>Cab Booking App</strong> — Full Privacy Policy
+            <strong>EasyRide App</strong> — Full Privacy Policy
           </h3>
 
           <div className="space-y-6 text-gray-700 leading-relaxed">
@@ -89,14 +89,15 @@ const PrivacyPolicy: React.FC = () => {
             <p><strong>Effective Date:</strong> November 24, 2025</p>
 
             <p>
-              At Grace Cabs Private Limited ("Company," "we," "our," "us"), we take your privacy seriously. 
-              This Privacy Policy explains how we handle your information when you use our website or mobile application <strong>Cab Booking App</strong>.
-              This must be read along with our Terms and Conditions: https://gracecabs.com/.
+              At EasyRide Private Limited ("Company," "we," "our," "us"), we take your privacy seriously. 
+              This Privacy Policy explains how we handle your information when you use our website or mobile application <strong>EasyRide App</strong>.
+              This must be read along with our Terms and Conditions: https://easyride.in/.
             </p>
 
             <p>
-              By accessing or using the <strong>Cab Booking App</strong>, you agree to be governed by this Privacy Policy.
+              By accessing or using the <strong>EasyRide App</strong>, you agree to be governed by this Privacy Policy.
             </p>
+
 
             {/* 1. INFORMATION WE COLLECT */}
             <h4 className="text-xl font-semibold text-teal-700">1. Information We Collect</h4>
@@ -154,10 +155,11 @@ const PrivacyPolicy: React.FC = () => {
 
             <p>If you have concerns or questions:</p>
             <ul className="list-disc ml-6 space-y-2">
-              <li>Email: <strong>traveldesk@gracecabs.com</strong></li>
+              <li>Email: <strong>support@easyride.in</strong></li>
               <li>Call Center: <strong>+91 98417 22675</strong></li>
               <li>Address: 7/621, Nesamani Nagar Ext, Perumbakkam, Sholinganallur, Chennai – 600100</li>
             </ul>
+
 
           </div>
         </section>

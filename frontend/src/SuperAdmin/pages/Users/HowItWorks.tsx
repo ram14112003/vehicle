@@ -196,9 +196,10 @@ const HowItWorks = () => {
               Ready to Book Your Cab?
             </h3>
             <p className="text-gray-200 text-lg mb-8">
-              Experience seamless booking with Grace Cabs - Your trusted travel
+              Experience seamless booking with EasyRide - Your trusted travel
               partner
             </p>
+
             <motion.button
               whileHover={{ scale: 1.05 }}
               whileTap={{ scale: 0.95 }}

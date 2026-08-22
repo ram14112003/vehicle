@@ -70,9 +70,9 @@ export const Navbar: React.FC<NavbarProps> = ({ transparent = false }) => {
             <Phone size={13} className="text-amber-400" />
             <span className="font-medium">+91 98417 22675</span>
           </a>
-          <a href="mailto:traveldesk@gracecabs.com" className="hidden sm:flex items-center gap-1.5 hover:text-amber-400 transition-colors">
+          <a href="mailto:support@easyride.in" className="hidden sm:flex items-center gap-1.5 hover:text-amber-400 transition-colors">
             <Mail size={13} className="text-amber-400" />
-            <span>traveldesk@gracecabs.com</span>
+            <span>support@easyride.in</span>
           </a>
         </div>
         <div className="flex items-center gap-4 text-[11px]">
@@ -111,13 +111,14 @@ export const Navbar: React.FC<NavbarProps> = ({ transparent = false }) => {
             </div>
             <div>
               <div className="flex items-center text-xl sm:text-2xl font-black tracking-tight text-slate-900">
-                GRACE<span className="text-amber-500 ml-0.5">CABS</span>
+                Easy<span className="text-amber-500 ml-0.5">Ride</span>
               </div>
               <p className="text-[10px] font-semibold text-slate-500 tracking-wider uppercase -mt-1">
                 Reliable Rides Everyday
               </p>
             </div>
           </Link>
+
 
           {/* Desktop Navigation Links */}
           <nav className="hidden md:flex items-center gap-1 lg:gap-2">
@@ -297,8 +298,9 @@ export const Navbar: React.FC<NavbarProps> = ({ transparent = false }) => {
               onClick={() => setMobileMenuOpen(false)}
               className="block px-3 py-2 rounded-lg text-base font-semibold text-slate-800 hover:bg-slate-100"
             >
-              Why Grace Cabs
+              Why EasyRide
             </a>
+
 
             <div className="pt-3 border-t border-slate-100">
               {isAuthenticated ? (

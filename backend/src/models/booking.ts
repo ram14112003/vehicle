@@ -421,6 +421,44 @@ managerEmail!: string;
     defaultValue: 0,
   })
   finalFare!: number;
+
+  @Column({
+    type: DataType.STRING,
+    allowNull: true,
+    defaultValue: 'PENDING',
+  })
+  paymentStatus!: string;
+
+  @Column({
+    type: DataType.STRING,
+    allowNull: true,
+  })
+  paymentMethod!: string;
+
+  @Column({
+    type: DataType.STRING,
+    allowNull: true,
+  })
+  paymentTransactionId!: string;
+
+  @Column({
+    type: DataType.DATE,
+    allowNull: true,
+  })
+  paidAt!: Date;
+
+  @Column({
+    type: DataType.DATE,
+    allowNull: true,
+  })
+  startedAt!: Date;
+
+  @Column({
+    type: DataType.DATE,
+    allowNull: true,
+  })
+  completedAt!: Date;
 }
+
 
 

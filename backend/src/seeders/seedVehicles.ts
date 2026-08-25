@@ -217,7 +217,8 @@ export const seedInitialVehicles = async () => {
       }
     }
 
-    console.log("Grace Cabs fleet seeded & historical bookings successfully repaired!");
+    console.log("EasyRide fleet seeded & historical bookings successfully repaired!");
+
   } catch (error) {
     console.error("Error seeding & repairing initial vehicle fleet:", error);
   }

@@ -535,7 +535,7 @@ height:38px;">
 
 <!-- HEADER -->
 <div class="page-header">
-  ${logoSrc ? `<img src="${logoSrc}" class="logo" />` : `<div><b style="font-size:16px;color:#1a4f7a;">Grace Cabs</b></div>`}
+  ${logoSrc ? `<img src="${logoSrc}" class="logo" />` : `<div><b style="font-size:16px;color:#1a4f7a;">EasyRide</b></div>`}
   <div class="header-right">
     <div class="inv-no">Invoice No: ${invoiceCode}</div>
     <div>Invoice Date: ${invoiceDate}</div>
@@ -551,12 +551,13 @@ height:38px;">
   <!-- LEFT COLUMN: BILLING FROM -->
   <div class="billing-box">
     <div class="billing-label">Billing From</div>
-    <div class="billing-row" style="font-weight: bold; color: #1a4f7a;">Grace Cabs Private Limited</div>
+    <div class="billing-row" style="font-weight: bold; color: #1a4f7a;">EasyRide Private Limited</div>
     <div class="billing-row">7/621 Nesamani Nagar</div>
     <div class="billing-row">Perumbakkam</div>
     <div class="billing-row">Chennai - 600100</div>
     <div class="billing-row" style="margin-top: 2px;"><span class="bk">GSTIN :</span><span class="bv">33AAMCG2518C1Z0</span></div>
   </div>
+
 
   <!-- RIGHT COLUMN: BILLING TO -->
   <div class="billing-box">
@@ -612,10 +613,11 @@ height:38px;">
 <!-- FOOTER -->
 <div class="footer">
   <div>
-    <div><b>Grace Cabs Pvt. Ltd.</b></div>
+    <div><b>EasyRide Pvt. Ltd.</b></div>
     <div>7/621 Nesamani Nagar, Perumbakkam, Chennai - 600100</div>
-    <div>Website: gracecabs.com</div>
+    <div>Website: easyride.in</div>
   </div>
+
   <div>
     <div><b>GSTIN:</b> 33AAMCG2518C1Z0</div>
     <div><b>PAN No:</b> AAMCG2518C</div>

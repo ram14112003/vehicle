@@ -238,7 +238,8 @@ export const sendEmailFromTemplate = async (
   // Headers
   // const headerFrom = `${emailConf.fromName || "No-Reply"} <${emailConf.fromAddress || smtpUser}>`;
   const headerFrom =
-  `${emailConf.fromName || "GraceCabs"} <${smtpUser}>`;
+  `${emailConf.fromName || "EasyRide"} <${smtpUser}>`;
+
 
   const bccList: string[] = emailConf.emailBcc
     ? String(emailConf.emailBcc).split(",").map(s => s.trim()).filter(Boolean)

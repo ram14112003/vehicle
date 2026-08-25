@@ -1623,10 +1623,11 @@ ${addressParts.slice(4).join(",")}
 <!-- FOOTER -->
 <div class="footer">
   <div>
-    <div><b>Grace Cabs Pvt. Ltd.</b></div>
+    <div><b>EasyRide Pvt. Ltd.</b></div>
     <div>7/621 Nesamani Nagar, Perumbakkam, Chennai - 600100</div>
-    <div>Website: gracecabs.com</div>
+    <div>Website: easyride.in</div>
   </div>
+
   <div>
     <div><b>GSTIN:</b> 33AAMCG2518C1Z0</div>
     <div><b>PAN No:</b> AAMCG2518C</div>

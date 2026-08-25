@@ -965,10 +965,11 @@ export const forgetPasswordSendOtp = async (req: Request, res: Response) => {
         UserName: userResult.userData.username ?? "",
         UserEmail: userResult.userData.email ?? email,
         OTP: otp,
-        WEB_SITE_NAME: "www.gracecabs.com",
-        WEB_SITE_EMAIL: "traveldesk@gracecabs.com",
+        WEB_SITE_NAME: "www.easyride.in",
+        WEB_SITE_EMAIL: "support@easyride.in",
         CONTACT_NO: "+91 98417 22675",
       });
+
     }
     console.log("otp",otp);
     return res.status(200).json({ success: true, message: "If the email exists, an OTP has been sent." });

@@ -187,11 +187,12 @@ const company = await Company.findOne({ where:  { companyId: userData?.companyId
         Vehicle: ${vehicleName ?? ""}</br/>
         Vehicle Number: ${vehicleNumber ?? ""}<br/>
         `,
-        WEB_SITE_NAME: "www.gracecabs.com",
-        WEB_SITE_EMAIL: "traveledesk@gracecabs.com",
+        WEB_SITE_NAME: "www.easyride.in",
+        WEB_SITE_EMAIL: "support@easyride.in",
         CONTACT_NO: "+91 98417 22675",
 
       });
+
     }
 
     const driverEmail = driver?.driverEmail;
@@ -354,11 +355,12 @@ export const confirmBookingforWeb = async (req: any, res: Response) => {
               Vehicle No: ${vehicleNumber}<br/>
             `,
             GraceDetails: `
-              WEB_SITE_NAME: "www.gracecabs.com" <br/>
-              WEB_SITE_EMAIL: "traveldesk@gracecabs.com" <br/>
+              WEB_SITE_NAME: "www.easyride.in" <br/>
+              WEB_SITE_EMAIL: "support@easyride.in" <br/>
               CONTACT_NO: "+91 98417 22675"<br/>
             `,
           });
+
         }
 
         // Driver email

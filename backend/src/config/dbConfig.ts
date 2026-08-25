@@ -34,6 +34,8 @@ import { MonthlyBookingSequence } from '../models/monthlyBookingSequence';
 import { MapCount } from '../models/mapCount';
 import { OnCallInvoice } from '../models/onCallInvoice';
 import { OnCallInvoiceItems } from '../models/onCallInvoiceItems';
+import { DriverNotification } from '../models/driverNotification';
+import { CustomerNotification } from '../models/customerNotification';
 
 const sequelize = new Sequelize({
   dialect: config.database.dialect as Dialect,
@@ -44,8 +46,10 @@ const sequelize = new Sequelize({
   models: [Employee, Company, Drivers, Vehicle, Vendor, User, Booking, Invoice, Partner,
     Payment,VehicleType,OTP, Tax, Pickuparea,Pickupcity,VehicleMaster,PaymentMode,orderSummery,Package,
     PackageData,Configuration,ClosePending,EmailConfiguration,BookingSequence,PaymentSequence, InvoiceSequence,
-     MonthlyInvoice, MonthlyInvoiceItems, MonthlyBookingSequence,MapCount,OnCallInvoice,OnCallInvoiceItems],
+     MonthlyInvoice, MonthlyInvoiceItems, MonthlyBookingSequence,MapCount,OnCallInvoice,OnCallInvoiceItems, DriverNotification, CustomerNotification],
   logging: false,
 });
+
+
 
 export default sequelize;

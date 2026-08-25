@@ -42,6 +42,7 @@ interface BookingItem {
   paymentTransactionId?: string;
   paidAt?: string;
   vehicleType?: string;
+  vehicleName?: string;
   fare?: number;
   driverName?: string;
   driverPhone?: string;
@@ -49,6 +50,7 @@ interface BookingItem {
   vehicleModel?: string;
   createdAt: string;
 }
+
 
 export const MyBookings: React.FC = () => {
   const { user, isAuthenticated } = useAuth();
@@ -116,6 +118,7 @@ export const MyBookings: React.FC = () => {
             paymentTransactionId: b.paymentTransactionId,
             paidAt: b.paidAt,
             vehicleType: vName,
+            vehicleName: b.vehicle?.vehicleName || vName,
             fare: Number(finalFareVal),
             driverName: b.driver?.driverName,
             driverPhone: b.driver?.phno,
@@ -123,6 +126,7 @@ export const MyBookings: React.FC = () => {
             vehicleModel: b.vehicle?.vehicleName || undefined,
             createdAt: b.createdAt || new Date().toISOString()
           };
+
         });
         setBookings(mapped);
       } else {
@@ -484,30 +488,48 @@ export const MyBookings: React.FC = () => {
                         ) : null}
                       </div>
 
-                      {/* Assigned Chauffeur Banner (if assigned) */}
-                      {b.driverName && (
-                        <div className="p-3.5 rounded-2xl bg-blue-50/80 border border-blue-100 flex items-center justify-between text-xs">
+                      {/* Assigned Chauffeur Banner (if assigned) / Unassigned Status */}
+                      {b.driverName ? (
+                        <div className="p-3.5 rounded-2xl bg-blue-50/90 border border-blue-100 flex items-center justify-between text-xs">
                           <div className="flex items-center gap-2.5">
-                            <div className="w-8 h-8 rounded-full bg-blue-600 text-white flex items-center justify-center font-bold text-xs">
-                              {b.driverName.charAt(0)}
+                            <div className="w-9 h-9 rounded-xl bg-blue-600 text-white flex items-center justify-center font-black text-xs shadow-xs">
+                              {b.driverName.charAt(0).toUpperCase()}
                             </div>
                             <div>
-                              <span className="font-bold text-slate-900 block">{b.driverName}</span>
-                              <span className="text-[11px] text-blue-700 font-semibold">
-                                Chauffeur Assigned
+                              <div className="flex items-center gap-1.5">
+                                <span className="font-extrabold text-slate-900">{b.driverName}</span>
+                                <span className="px-1.5 py-0.5 rounded-md bg-blue-200/70 text-blue-900 font-bold text-[9px] uppercase">
+                                  Assigned
+                                </span>
+                              </div>
+                              <span className="text-[11px] text-slate-600 block mt-0.5 font-medium">
+                                {b.vehicleName || b.vehicleType || "Cab"}
+                                {b.vehicleNumber ? ` · ${b.vehicleNumber}` : ""}
                               </span>
                             </div>
                           </div>
                           {b.driverPhone && (
                             <a
                               href={`tel:${b.driverPhone}`}
-                              className="px-3 py-1.5 rounded-xl bg-white border border-blue-200 text-blue-700 font-bold text-xs flex items-center gap-1 hover:bg-blue-50 transition-colors"
+                              className="px-3.5 py-2 rounded-xl bg-blue-600 hover:bg-blue-700 text-white font-bold text-xs flex items-center gap-1.5 shadow-xs transition-all active:scale-95"
+                              title="Call Driver"
                             >
-                              <Phone size={12} /> Call
+                              <Phone size={13} /> Call Driver
                             </a>
                           )}
                         </div>
+                      ) : (
+                        <div className="p-3 rounded-2xl bg-slate-50 border border-slate-200/80 flex items-center justify-between text-xs text-slate-500">
+                          <div className="flex items-center gap-2">
+                            <Clock size={13} className="text-amber-500" />
+                            <span className="font-semibold text-slate-700">Driver not assigned yet</span>
+                          </div>
+                          <span className="text-[10px] text-slate-400 font-medium bg-slate-100 px-2 py-0.5 rounded-md">
+                            Assigning soon
+                          </span>
+                        </div>
                       )}
+
 
                       {/* Post-Ride Payment Prompt Banner */}
                       {isPendingPayment && (
@@ -638,33 +660,47 @@ export const MyBookings: React.FC = () => {
               </div>
             </div>
 
-            {/* Assigned Driver Details (if assigned) */}
-            {selectedBooking.driverName && (
-              <div className="p-4 rounded-2xl bg-blue-50 border border-blue-200/70 text-xs space-y-2">
-                <span className="text-[10px] uppercase font-black text-blue-800 block tracking-wider">
-                  Assigned Chauffeur & Vehicle
-                </span>
+            {/* Assigned Driver Details (if assigned) / Unassigned Status */}
+            {selectedBooking.driverName ? (
+              <div className="p-4 rounded-2xl bg-blue-50 border border-blue-200/80 text-xs space-y-3">
                 <div className="flex items-center justify-between">
-                  <span className="font-bold text-slate-900">{selectedBooking.driverName}</span>
+                  <span className="text-[10px] uppercase font-black text-blue-800 tracking-wider">
+                    Assigned Chauffeur & Vehicle
+                  </span>
+                  <span className="px-2 py-0.5 rounded-full bg-blue-200/70 text-blue-900 text-[10px] font-bold">
+                    Verified Driver
+                  </span>
+                </div>
+                <div className="flex items-center justify-between">
+                  <div>
+                    <span className="font-black text-slate-900 text-sm block">{selectedBooking.driverName}</span>
+                    <span className="text-[11px] text-slate-600 block mt-0.5 font-medium">
+                      {selectedBooking.vehicleName || selectedBooking.vehicleType || "Cab"}
+                      {selectedBooking.vehicleNumber ? ` · Plate: ${selectedBooking.vehicleNumber}` : ""}
+                    </span>
+                  </div>
                   {selectedBooking.driverPhone && (
                     <a
                       href={`tel:${selectedBooking.driverPhone}`}
-                      className="text-blue-700 font-bold hover:underline"
+                      className="px-4 py-2 rounded-xl bg-blue-600 hover:bg-blue-700 text-white font-bold text-xs flex items-center gap-1.5 shadow-sm transition-all active:scale-95"
                     >
-                      {selectedBooking.driverPhone}
+                      <Phone size={13} /> Call Driver
                     </a>
                   )}
                 </div>
-                {selectedBooking.vehicleNumber && (
-                  <div className="pt-2 border-t border-blue-200/50 flex justify-between text-[11px]">
-                    <span className="text-slate-500">Plate Number:</span>
-                    <span className="font-mono font-bold text-slate-900">
-                      {selectedBooking.vehicleNumber}
-                    </span>
+              </div>
+            ) : (
+              <div className="p-4 rounded-2xl bg-slate-50 border border-slate-200 text-xs flex items-center justify-between text-slate-500">
+                <div className="flex items-center gap-2">
+                  <Clock size={15} className="text-amber-500" />
+                  <div>
+                    <span className="font-bold text-slate-800 block">Driver not assigned yet</span>
+                    <span className="text-[11px] text-slate-500">Admin is currently assigning the nearest available chauffeur.</span>
                   </div>
-                )}
+                </div>
               </div>
             )}
+
 
             {/* Total Fare & Payment Status */}
             <div className="p-4 rounded-2xl bg-slate-900 text-white space-y-2">

@@ -31,6 +31,8 @@ import { OnCallInvoice } from './onCallInvoice';
 import { OnCallInvoiceItems } from './onCallInvoiceItems';
 import { MonthlyInvoice } from './monthlyInvoice';
 import { MonthlyInvoiceItems } from './monthlyInvoiceItems';
+import { DriverNotification } from './driverNotification';
+import { CustomerNotification } from './customerNotification';
 import { seedInitialVehicles } from '../seeders/seedVehicles';
 
 const connectDB = async () => {
@@ -48,5 +50,7 @@ const connectDB = async () => {
 export { sequelize, connectDB, Employee, Company, Drivers,Vehicle,Vendor,User, Booking, Invoice, EmailConfiguration,
   VehicleType, Tax, Pickuparea, Pickupcity, VehicleMaster,OTP,PaymentMode,Payment,orderSummery,Package,PackageData,Configuration,
   ClosePending, BookingSequence, PaymentSequence, InvoiceSequence, ShortLink, MonthlyBookingSequence, MapCount, OnCallInvoice,
-  OnCallInvoiceItems, MonthlyInvoice, MonthlyInvoiceItems
+  OnCallInvoiceItems, MonthlyInvoice, MonthlyInvoiceItems, DriverNotification, CustomerNotification
 };
+
+

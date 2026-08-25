@@ -380,8 +380,9 @@ export function buildEmailInvoiceBlockFromRaw(completeBooking: any, cp: any, inv
     <tr>
       <td style="width: 50%; vertical-align: top;">
         <img src="https://gracecabs.com/images/logo.png"
-             alt="Grace Cabs"
+             alt="EasyRide"
              style="max-height: 70px; display: block;" />
+
       </td>
       <td style="width: 50%; vertical-align: top; text-align: right; font-size: 12px;">
         <div style="margin-bottom: 5px;"><strong>Invoice Number:</strong> ${invoiceNumber}</div>
@@ -649,9 +650,10 @@ export function buildEmailInvoiceBlockFromRaw(completeBooking: any, cp: any, inv
 
       <!-- Footer Information -->
       <div style="margin-top: 20px; padding-top: 15px; border-top: 1px solid #ddd; font-size: 10px; line-height: 1.4; color: #666;">
-        <div style="margin-bottom: 2px;"><strong>Regd.Office:</strong> Grace Cabs Pvt. Ltd., 7/621 NESAMANI NAGAR, PERUMBAKKAM, CHENNAI - 600100</div>
-        <div style="margin-bottom: 2px;"><strong>Website:</strong> gracecabs.com</div>
+        <div style="margin-bottom: 2px;"><strong>Regd.Office:</strong> EasyRide Pvt. Ltd., 7/621 NESAMANI NAGAR, PERUMBAKKAM, CHENNAI - 600100</div>
+        <div style="margin-bottom: 2px;"><strong>Website:</strong> easyride.in</div>
         <div style="margin-bottom: 2px;"><strong>GSTIN:</strong> 33AAMCG2518C1Z0</div>
+
         <div style="margin-bottom: 2px;"><strong>PAN No.:</strong> AAMCG2518C</div>
         <div style="margin-bottom: 2px;"><strong>SAC:</strong> 996609</div>
         <div style="margin-top: 10px; font-style: italic;">It is a system generated invoice which does not need a signature</div>

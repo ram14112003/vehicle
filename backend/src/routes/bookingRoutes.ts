@@ -3,7 +3,10 @@ import { getAllOrders, editBooking, cancelBooking, declineBooking, getOrderById,
   getOrderByEmployeeId,getBookingDetails, getOrderPaymentListById,getOverallInvoiceReport,companyBookingReport,
   getMonthlyBookings,getAllOrdersByUser,getCancelledOrdersByUser,getClosedOrdersByUser,getConfirmedOrdersByUser,
   getOrdersByStatus,getPaymentCompletedOrdersByUser,getPendingOrdersByUser,getPendingInvoicesByUser,getPaymentPendingOrdersByUser,downloadUserInvoicePdf,
-  createPartner,editCloseBooking, getDashboardStats, updateBookingStatus, getAllAdminBookings } from '../services/bookingServices';
+  createPartner,editCloseBooking, getDashboardStats, updateBookingStatus, getAllAdminBookings,
+  getAvailableDrivers, assignDriverToBooking, startBookingTrip, completeBookingTrip, processCustomerPayment, markAdminCashPaymentPaid,
+  getCustomerNotifications, markCustomerNotificationRead, markAllCustomerNotificationsRead
+} from '../services/bookingServices';
 
 import { authMiddleware } from '../middleware/authMiddleware';
 import {
@@ -20,6 +23,25 @@ router.get("/admin/dashboard-stats", getDashboardStats);
 router.get("/admin/all-bookings", getAllAdminBookings);
 router.put("/update-status", updateBookingStatus);
 router.put("/status/:bookingId", updateBookingStatus);
+
+// 🚀 Lifecycle & Payment Routes
+router.get("/available-drivers", getAvailableDrivers);
+router.post("/assign-driver", assignDriverToBooking);
+router.put("/assign-driver/:bookingId", assignDriverToBooking);
+router.post("/start-trip", startBookingTrip);
+router.put("/start-trip/:bookingId", startBookingTrip);
+router.post("/complete-trip", completeBookingTrip);
+router.put("/complete-trip/:bookingId", completeBookingTrip);
+router.post("/pay-now", processCustomerPayment);
+router.post("/pay-now/:bookingId", processCustomerPayment);
+router.post("/mark-cash-paid", markAdminCashPaymentPaid);
+router.put("/mark-cash-paid/:bookingId", markAdminCashPaymentPaid);
+
+// 🔔 Customer Notification Routes
+router.get("/customer/notifications/:userId", getCustomerNotifications);
+router.put("/customer/notifications/:notificationId/read", markCustomerNotificationRead);
+router.put("/customer/notifications/mark-all-read/:userId", markAllCustomerNotificationsRead);
+
 
 
 router.get("/getAllOrders", authMiddleware,getAllOrders);

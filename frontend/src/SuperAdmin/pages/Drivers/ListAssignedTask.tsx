@@ -255,9 +255,17 @@ const ListAssignedTask: React.FC = () => {
                               <span className="font-black text-slate-900 block">
                                 {t.driver?.driverName || 'Assigned Driver'}
                               </span>
-                              <span className="text-[10px] text-slate-400 font-mono">
-                                {t.driver?.phno}
-                              </span>
+                              {t.driver?.phno ? (
+                                <a
+                                  href={`tel:${t.driver.phno}`}
+                                  className="inline-flex items-center gap-1 text-[11px] font-bold text-blue-600 hover:text-blue-800 transition-colors"
+                                  title="Call Driver"
+                                >
+                                  <Phone size={10} /> {t.driver.phno}
+                                </a>
+                              ) : (
+                                <span className="text-[10px] text-slate-400 font-mono">-</span>
+                              )}
                             </div>
                           </div>
                         </td>
@@ -267,10 +275,19 @@ const ListAssignedTask: React.FC = () => {
                           <span className="font-bold text-slate-900 block">
                             {t.user?.username || t.behalfOfName || 'Customer'}
                           </span>
-                          <span className="text-[11px] text-slate-400">
-                            {t.user?.mobile || t.behalfOfPhone || '-'}
-                          </span>
+                          {(t.user?.mobile || t.behalfOfPhone) ? (
+                            <a
+                              href={`tel:${t.user?.mobile || t.behalfOfPhone}`}
+                              className="inline-flex items-center gap-1 px-2.5 py-1 mt-1 rounded-lg bg-emerald-50 hover:bg-emerald-100 text-emerald-700 font-bold text-[11px] border border-emerald-200/60 shadow-2xs transition-all active:scale-95"
+                              title="Call Customer"
+                            >
+                              <Phone size={11} /> Call Customer
+                            </a>
+                          ) : (
+                            <span className="text-[11px] text-slate-400">-</span>
+                          )}
                         </td>
+
 
                         {/* Route */}
                         <td className="py-3.5 px-4 max-w-[220px]">

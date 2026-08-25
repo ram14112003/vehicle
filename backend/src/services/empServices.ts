@@ -143,11 +143,13 @@ export const createBookingForWeb = async (req: any, res: Response) => {
       employeeId = null; // no employee
     }
 
-    const confirmStatus = STATUS.PENDING;
-    const bookingStatus = STATUS.PENDING;
+    const confirmStatus = "Confirmed";
+    const bookingStatus = "CONFIRMED";
+    const paymentStatus = "PENDING";
     const driverTripStatus = STATUS.PENDING;
     const autoApproveStatus = STATUS.PENDING;    
     const company = user?.companyId ? await Company.findByPk(user.companyId) : null;
+
 
     // 1. Resolve VehicleType & its dynamic pricing strictly from Database
     let vType = null;
@@ -244,7 +246,9 @@ export const createBookingForWeb = async (req: any, res: Response) => {
       purpose,
       confirmStatus,
       bookingStatus,
+      paymentStatus,
       vehicleId,
+
       driverId,
       vehicleTypeId: vType.vehicleTypeId,
       preferredType: vType.vehicleType,
@@ -544,10 +548,12 @@ export const createBookingForWebOnCall = async (req: any, res: Response) => {
       employeeId = null; // no employee
     }
 
-    const confirmStatus = STATUS.PENDING;
-    const bookingStatus = STATUS.PENDING;
+    const confirmStatus = "Confirmed";
+    const bookingStatus = "CONFIRMED";
+    const paymentStatus = "PENDING";
     const autoApproveStatus = STATUS.PENDING;    
     const company = await Company.findByPk(user?.companyId);
+
 
     // Derive booking time if not given
     let finalBookingTime = bookingTime;
@@ -628,7 +634,9 @@ export const createBookingForWebOnCall = async (req: any, res: Response) => {
       purpose,
       confirmStatus,
       bookingStatus,
+      paymentStatus,
       vehicleId,
+
       driverId,
       vehicleTypeId: vType.vehicleTypeId,
       preferredType: vType.vehicleType,
@@ -2002,11 +2010,12 @@ console.log("cancel needEmail:", needEmail);
                 //   Vehicle: ${vehicle?.vehicleName ?? ""}
                 // `,
 
-                WEB_SITE_NAME: "www.gracecabs.com",
-        WEB_SITE_EMAIL: "traveldesk@gracecabs.com",
+                WEB_SITE_NAME: "www.easyride.in",
+        WEB_SITE_EMAIL: "support@easyride.in",
         CONTACT_NO: "+91 98417 22675",
         
               });
+
             }  
        
            }

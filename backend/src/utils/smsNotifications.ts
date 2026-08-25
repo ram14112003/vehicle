@@ -100,8 +100,9 @@ export async function sendSmsNotifications(options: {
       `&var6=${encodeURIComponent(driver?.phno || "")}` +
       `&var7=${encodeURIComponent(vehicle?.vehicleName || "")}` +
       `&var8=${encodeURIComponent(vehicleNumber)}` +
-      `&var9=${encodeURIComponent("Grace Cabs")}` +
+      `&var9=${encodeURIComponent("EasyRide")}` +
       `&var10=${encodeURIComponent("9003241571")}`;
+
 
     const r = await sendSmsVia2Factor(url, "user");
     if (!r.ok) throw new Error("User SMS failed");
@@ -132,8 +133,9 @@ export async function sendSmsNotifications(options: {
       `&var4=${encodeURIComponent(vehicle?.vehicleName || "")}` +
       `&var5=${encodeURIComponent(vehicleNumber)}` +
       `&var6=${encodeURIComponent(formattedBookingDate || "")}` +
-      `&var7=${encodeURIComponent("Grace Cabs")}` +
+      `&var7=${encodeURIComponent("EasyRide")}` +
       `&var8=${encodeURIComponent("9003241571")}`;
+
 
     const r = await sendSmsVia2Factor(url, "user");
     if (!r.ok) throw new Error("User SMS failed");

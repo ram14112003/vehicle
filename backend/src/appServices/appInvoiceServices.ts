@@ -169,8 +169,9 @@ export const generateInvoiceHTML = (data: InvoiceData): string => {
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Grace Cabs Private Limited</title>
+    <title>EasyRide Private Limited</title>
     <style>
+
         * {
             margin: 0;
             padding: 0;
@@ -461,8 +462,9 @@ export const generateInvoiceHTML = (data: InvoiceData): string => {
         <!-- Header -->
        <div class="header">
     <div class="logo-section">
-    <img src="${logoSrc}" alt="Grace Cabs" class="logo-img" />
+    <img src="${logoSrc}" alt="EasyRide" class="logo-img" />
     </div>
+
             <div class="invoice-info">
                 <div><strong>Invoice Number:</strong> ${data.invoiceNumber}</div>
                 <div><strong>Invoice Date:</strong> ${data.invoiceDate}</div>
@@ -609,12 +611,13 @@ ${data.managerEmail ? `
         <div class="footer-info">
             <div class="footer-row">
                 <span class="footer-label">Regd.Office:</span>
-                <span>Grace Cabs  Pvt. Ltd., 7/621 NESAMANI NAGAR, PERUMBAKKAM, CHENNAI - 600100</span>
+                <span>EasyRide Pvt. Ltd., 7/621 NESAMANI NAGAR, PERUMBAKKAM, CHENNAI - 600100</span>
             </div>
             <div class="footer-row">
                 <span class="footer-label">Website:</span>
-                <span>gracecabs.com</span>
+                <span>easyride.in</span>
             </div>
+
             <div class="footer-row">
                 <span class="footer-label">GSTIN:</span>
                 <span>33AAMCG2518C1Z0</span>

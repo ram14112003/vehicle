@@ -1,7 +1,8 @@
 /**
- * Grace Cabs Distance & Routing Calculation Engine
+ * EasyRide Distance & Routing Calculation Engine
  * 
  * Provides a reliable, single source of truth for trip distances and travel durations.
+
  * Combines exact geocoded hubs, live OSRM routing, and Haversine road-network calculation.
  */
 

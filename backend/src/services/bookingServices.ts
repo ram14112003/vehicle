@@ -8,11 +8,14 @@ import { MonthlyInvoiceItems } from '../models/monthlyInvoiceItems';
 import { VehicleType } from '../models/vehicleType';
 import { USERS } from "../utils/costants";
 import { ORDER } from '../utils/costants';
-import { ClosePending, Employee, Invoice, PackageData, PaymentMode, Tax, User } from '../models';
+import { ClosePending, Employee, Invoice, PackageData, PaymentMode, Tax, User, Configuration } from '../models';
 import { Payment } from "../models/payment";
-import { Drivers, Vendor, VehicleMaster } from '../models';
+import { Drivers, Vendor, VehicleMaster, DriverNotification, CustomerNotification } from '../models';
 import { Company } from "../models/company";
 import { Op, fn, col, literal } from "sequelize";
+import nodemailer from "nodemailer";
+
+
 const { ROLES } = USERS;
 import { fetchAllEmailConfs, sendEmailFromTemplate } from "../services/emailConfServices";
 import { formatDateTime } from "../utils/formatDateTime";
@@ -253,8 +256,9 @@ export const createPartner = async (req: Request, res: Response) => {
       UserEmail: partner.email,
 
       // If template uses FromName & FromAddress
-      FromName: "Grace Cabs",
+      FromName: "EasyRide",
       FromAddress: "traveldesk@gracecabs.com",
+
     };
 
     // Send Email using template
@@ -628,9 +632,50 @@ export const cancelBooking = async (req: any, res: Response) => {
 
     // Update booking + related records
     const [affected] = await Booking.update(
-      { confirmStatus: ORDER.STATUS.CANCELLED, remarks: remarks || "Cancelled by user" },
+      { confirmStatus: "Cancelled", bookingStatus: "CANCELLED", remarks: remarks || "Cancelled by user" },
       { where: { bookingId } }
     );
+
+    // If driver was assigned, release driver to AVAILABLE
+    if (booking.driverId) {
+      await Drivers.update(
+        { status: "AVAILABLE" },
+        { where: { driverId: booking.driverId } }
+      );
+      try {
+        await DriverNotification.create({
+          driverId: booking.driverId,
+          bookingId: booking.bookingId,
+          title: "EasyRide – Trip Cancelled",
+          message: `Booking #${booking.bookingCode} for ${booking.pickupPoint} to ${booking.dropPoint} has been cancelled.`
+        });
+
+      } catch (notifErr) {
+        console.warn("Driver cancellation notification error:", notifErr);
+      }
+    }
+
+    if (booking.userId) {
+      try {
+        const existingCustNotif = await CustomerNotification.findOne({
+          where: {
+            bookingId: booking.bookingId,
+            type: "BOOKING_CANCELLED"
+          }
+        });
+        if (!existingCustNotif) {
+          await CustomerNotification.create({
+            userId: booking.userId,
+            bookingId: booking.bookingId,
+            type: "BOOKING_CANCELLED",
+            title: "Booking Cancelled ❌",
+            message: `Your EasyRide booking #${booking.bookingCode} for ${booking.pickupPoint} to ${booking.dropPoint} has been cancelled.`
+          });
+        }
+      } catch (cNotifErr) {
+        console.warn("Customer cancellation notification error:", cNotifErr);
+      }
+    }
 
 
     if (booking.paymentId) {
@@ -650,6 +695,7 @@ export const cancelBooking = async (req: any, res: Response) => {
         .status(200)
         .json({ message: "No matching bookings found to update" });
     }
+
 
     // -----------------------------
     // 📧 Send Email to User only
@@ -4417,8 +4463,9 @@ export const generateInvoiceHTMLForuser = (data: any): string => {
 
     <div class="header">
       <div class="logo-section">
-        <img src="${logoSrc}" alt="Grace Cabs" class="logo-img" />
+        <img src="${logoSrc}" alt="EasyRide" class="logo-img" />
       </div>
+
       <div class="invoice-info">
         <p><strong>Invoice Number:</strong> ${data.invoiceNumber}</p>
         <p><strong>Invoice Date:</strong> ${data.invoiceDate}</p>
@@ -4499,9 +4546,10 @@ export const generateInvoiceHTMLForuser = (data: any): string => {
     </table>
 
     <div class="footer-info">
-      <div class="footer-row"><span class="footer-label">Regd.Office:</span><span>Grace Cabs  Pvt. Ltd., 7/621 NESAMANI NAGAR, PERUMBAKKAM, CHENNAI - 600100</span></div>
-      <div class="footer-row"><span class="footer-label">Website:</span><span>gracecabs.com</span></div>
+      <div class="footer-row"><span class="footer-label">Regd.Office:</span><span>EasyRide Pvt. Ltd., 7/621 NESAMANI NAGAR, PERUMBAKKAM, CHENNAI - 600100</span></div>
+      <div class="footer-row"><span class="footer-label">Website:</span><span>easyride.in</span></div>
       <div class="footer-row"><span class="footer-label">GSTIN:</span><span>33AAMCG2518C1Z0</span></div>
+
       <div class="footer-row"><span class="footer-label">PAN No.:</span><span>AAMCG2518C</span></div>
       <div class="footer-row"><span class="footer-label">SAC:</span><span>996609</span></div>
       <div class="footer-row"><p>It is a system generated invoice which does not need a signature</p></div>
@@ -4851,7 +4899,19 @@ export const updateBookingStatus = async (req: Request, res: Response) => {
       });
     }
 
-    const validStatuses = ["Pending", "Confirmed", "Completed", "Cancelled"];
+    const validStatuses = [
+      "Pending",
+      "Confirmed",
+      "CONFIRMED",
+      "Driver Assigned",
+      "DRIVER_ASSIGNED",
+      "Trip Started",
+      "TRIP_STARTED",
+      "Completed",
+      "TRIP_COMPLETED",
+      "Cancelled",
+      "CANCELLED"
+    ];
     const targetStatus = status || "Confirmed";
 
     if (!validStatuses.includes(targetStatus)) {
@@ -4869,6 +4929,16 @@ export const updateBookingStatus = async (req: Request, res: Response) => {
     if (remarks) updates.remarks = remarks;
     if (driverId) updates.driverId = driverId;
     if (vehicleId) updates.vehicleId = vehicleId;
+
+    if (targetStatus === "Completed" || targetStatus === "TRIP_COMPLETED") {
+      updates.completedAt = new Date();
+      if (booking.driverId || driverId) {
+        await Drivers.update(
+          { status: "AVAILABLE" },
+          { where: { driverId: driverId || booking.driverId } }
+        );
+      }
+    }
 
     await booking.update(updates);
 
@@ -4907,11 +4977,15 @@ export const getAllAdminBookings = async (req: Request, res: Response) => {
       if (s === "pending") {
         whereClause.confirmStatus = { [Op.in]: ["Pending", "0", 0, null] };
       } else if (s === "confirmed") {
-        whereClause.confirmStatus = { [Op.in]: ["Confirmed", "1", 1] };
+        whereClause.confirmStatus = { [Op.in]: ["Confirmed", "CONFIRMED", "1", 1] };
+      } else if (s === "assigned" || s === "driver_assigned") {
+        whereClause.confirmStatus = { [Op.in]: ["Driver Assigned", "DRIVER_ASSIGNED"] };
+      } else if (s === "started" || s === "trip_started") {
+        whereClause.confirmStatus = { [Op.in]: ["Trip Started", "TRIP_STARTED"] };
       } else if (s === "completed") {
-        whereClause.confirmStatus = { [Op.in]: ["Completed", "5", 5] };
+        whereClause.confirmStatus = { [Op.in]: ["Completed", "TRIP_COMPLETED", "5", 5] };
       } else if (s === "cancelled") {
-        whereClause.confirmStatus = { [Op.in]: ["Cancelled", "6", 6] };
+        whereClause.confirmStatus = { [Op.in]: ["Cancelled", "CANCELLED", "6", 6] };
       }
     }
 
@@ -4953,5 +5027,792 @@ export const getAllAdminBookings = async (req: Request, res: Response) => {
     });
   }
 };
+
+// ==========================================
+// 🚀 POST-RIDE PAYMENT & LIFECYCLE CONTROLLERS
+// ==========================================
+
+// 1️⃣ Get Available Drivers (strictly validates status & active trips)
+export const getAvailableDrivers = async (req: Request, res: Response) => {
+  try {
+    // Find all active bookings that currently occupy a driver
+    const busyBookings = await Booking.findAll({
+      where: {
+        confirmStatus: {
+          [Op.in]: ["DRIVER_ASSIGNED", "TRIP_STARTED", "Driver Assigned", "Trip Started"]
+        },
+        driverId: { [Op.ne]: null }
+      },
+      attributes: ["driverId"]
+    });
+
+    const busyDriverIds = busyBookings
+      .map((b) => b.driverId)
+      .filter((id): id is string => Boolean(id));
+
+    const whereDriver: any = {
+      isDeleted: false
+    };
+
+    if (busyDriverIds.length > 0) {
+      whereDriver.driverId = { [Op.notIn]: busyDriverIds };
+    }
+
+    const availableDrivers = await Drivers.findAll({
+      where: whereDriver,
+      include: [
+        { model: Vehicle, as: "vehicle", required: false },
+        { model: VehicleType, as: "vehicleType", required: false }
+      ],
+      order: [["driverName", "ASC"]]
+    });
+
+    return res.status(200).json({
+      success: true,
+      count: availableDrivers.length,
+      data: availableDrivers
+    });
+  } catch (error: any) {
+    console.error("Get Available Drivers Error:", error);
+    return res.status(500).json({
+      success: false,
+      message: "Failed to fetch available drivers",
+      error: error.message
+    });
+  }
+};
+
+// 2️⃣ Assign Driver to Booking (with atomic transaction, validation, real notifications & email dispatch)
+export const assignDriverToBooking = async (req: Request, res: Response) => {
+  const transaction = await Booking.sequelize!.transaction();
+  try {
+    const bookingId = req.params.bookingId || req.body.bookingId;
+    const { driverId } = req.body;
+
+    if (!bookingId || !driverId) {
+      await transaction.rollback();
+      return res.status(400).json({
+        success: false,
+        message: "Booking ID and Driver ID are required"
+      });
+    }
+
+    const booking = await Booking.findByPk(bookingId, { transaction });
+    if (!booking) {
+      await transaction.rollback();
+      return res.status(404).json({
+        success: false,
+        message: "Booking not found"
+      });
+    }
+
+    // Validate driver
+    const driver = await Drivers.findOne({
+      where: { driverId, isDeleted: false },
+      transaction
+    });
+
+    if (!driver) {
+      await transaction.rollback();
+      return res.status(404).json({
+        success: false,
+        message: "Driver not found"
+      });
+    }
+
+    // Check if driver is already occupied
+    const activeBooking = await Booking.findOne({
+      where: {
+        driverId,
+        bookingId: { [Op.ne]: bookingId },
+        confirmStatus: {
+          [Op.in]: ["DRIVER_ASSIGNED", "TRIP_STARTED", "Driver Assigned", "Trip Started"]
+        }
+      },
+      transaction
+    });
+
+    if (activeBooking) {
+      await transaction.rollback();
+      return res.status(400).json({
+        success: false,
+        message: "Driver is no longer available. Assigned to another active trip."
+      });
+    }
+
+    // Update booking & driver status in atomic transaction
+    await booking.update(
+      {
+        driverId,
+        confirmStatus: "Driver Assigned",
+        bookingStatus: "DRIVER_ASSIGNED"
+      },
+      { transaction }
+    );
+
+    await driver.update({ status: "ASSIGNED" }, { transaction });
+
+    await transaction.commit();
+
+    // Fetch updated booking with details for notifications and response
+    const updated = await Booking.findByPk(bookingId, {
+      include: [
+        { model: User, as: "user", required: false },
+        { model: VehicleType, as: "vehicleType", required: false },
+        { model: Vehicle, as: "vehicle", required: false },
+        { model: Drivers, as: "driver", required: false }
+      ]
+    });
+
+    const customerName = updated?.user?.username || (booking as any).riderName || booking.behalfOfName || "Valued Customer";
+    const customerPhone = updated?.user?.mobile || (booking as any).riderPhone || booking.behalfOfPhone || "";
+    const customerEmail = updated?.user?.email || (booking as any).email || "";
+    const vehicleName = updated?.vehicle?.vehicleName || updated?.vehicleType?.vehicleType || booking.preferredType || "Sedan";
+    const vehicleNumber = (updated?.vehicle as any)?.vehicleNo || (updated as any)?.vehicle?.vehicleMaster?.vehicleNumber || (booking as any).vehicleNumber || "TN 76 AB 1234";
+
+
+    // 1. Customer Notification (with duplicate prevention)
+    if (booking.userId) {
+      try {
+        const existingCustomerNotif = await CustomerNotification.findOne({
+          where: {
+            bookingId: booking.bookingId,
+            type: "DRIVER_ASSIGNED"
+          }
+        });
+
+        if (!existingCustomerNotif) {
+          await CustomerNotification.create({
+            userId: booking.userId,
+            bookingId: booking.bookingId,
+            type: "DRIVER_ASSIGNED",
+            title: "Driver Assigned 🚗",
+            message: `Driver Assigned\n\nDriver:\n${driver.driverName}\n\nPhone:\n${driver.phno}\n\nVehicle:\n${vehicleName}\n\nVehicle Number:\n${vehicleNumber}\n\nPickup:\n${booking.pickupPoint}\n\nDrop:\n${booking.dropPoint}\n\nDate:\n${booking.bookingDate}\n\nTime:\n${booking.bookingTime}`
+          });
+        }
+      } catch (custNotifErr) {
+        console.warn("Failed to create customer notification:", custNotifErr);
+      }
+    }
+
+    // 2. Driver Notification (with duplicate prevention)
+    try {
+      const existingDriverNotif = await DriverNotification.findOne({
+        where: {
+          bookingId: booking.bookingId,
+          driverId: driver.driverId,
+          type: "NEW_RIDE_ASSIGNED"
+        }
+      });
+
+      if (!existingDriverNotif) {
+        await DriverNotification.create({
+          driverId: driver.driverId,
+          bookingId: booking.bookingId,
+          type: "NEW_RIDE_ASSIGNED",
+          title: "New Ride Assigned 🚗",
+          message: `New Ride Assigned\n\nBooking #${booking.bookingCode}\n\nCustomer:\n${customerName}\n\nCustomer Phone:\n${customerPhone}\n\nPickup:\n${booking.pickupPoint}\n\nDrop:\n${booking.dropPoint}\n\nDate:\n${booking.bookingDate}\n\nTime:\n${booking.bookingTime}\n\nVehicle:\n${vehicleName}\n\nVehicle Number:\n${vehicleNumber}`
+        });
+      }
+    } catch (drvNotifErr) {
+      console.warn("Failed to create driver notification:", drvNotifErr);
+    }
+
+    // 3. Asynchronous, Non-Blocking Email Notifications
+    (async () => {
+      try {
+        const conf = await Configuration.findOne();
+        if (conf?.smtpServer && conf?.smtpEmailAddress) {
+          const transporter = nodemailer.createTransport({
+            host: conf.smtpServer.trim(),
+            port: Number(conf.smtpEmailPort) || 587,
+            secure: Number(conf.smtpEmailPort) === 465,
+            auth: {
+              user: conf.smtpEmailAddress.trim(),
+              pass: (conf.smtpEmailPassword || "").trim()
+            }
+          });
+
+          // Customer Email
+          if (customerEmail) {
+            await transporter.sendMail({
+              from: `"EasyRide" <${conf.smtpEmailAddress.trim()}>`,
+              to: customerEmail,
+              subject: "EasyRide – Driver Assigned",
+              html: `
+                <div style="font-family: Arial, sans-serif; color: #1e293b; max-width: 600px; margin: auto; padding: 20px; border: 1px solid #e2e8f0; rounded: 12px;">
+                  <h2 style="color: #d97706; margin-bottom: 8px;">EasyRide – Driver Assigned 🚗</h2>
+                  <p>Dear <strong>${customerName}</strong>,</p>
+                  <p>Your driver has been assigned for your EasyRide booking <strong>#${booking.bookingCode}</strong>.</p>
+                  <div style="background-color: #f8fafc; border: 1px solid #e2e8f0; border-radius: 8px; padding: 16px; margin: 16px 0; line-height: 1.6;">
+                    <p style="margin: 4px 0;"><strong>Driver Name:</strong> ${driver.driverName}</p>
+                    <p style="margin: 4px 0;"><strong>Driver Phone:</strong> <a href="tel:${driver.phno}" style="color: #2563eb; font-weight: bold;">${driver.phno}</a></p>
+                    <p style="margin: 4px 0;"><strong>Vehicle:</strong> ${vehicleName}</p>
+                    <p style="margin: 4px 0;"><strong>Vehicle Number:</strong> ${vehicleNumber}</p>
+                    <hr style="border: none; border-top: 1px solid #e2e8f0; margin: 12px 0;" />
+                    <p style="margin: 4px 0;"><strong>Pickup:</strong> ${booking.pickupPoint}</p>
+                    <p style="margin: 4px 0;"><strong>Drop:</strong> ${booking.dropPoint}</p>
+                    <p style="margin: 4px 0;"><strong>Schedule:</strong> ${booking.bookingDate} at ${booking.bookingTime}</p>
+                  </div>
+                  <p style="font-size: 13px; color: #64748b;">Thank you for riding with EasyRide!</p>
+                </div>
+              `
+            });
+          }
+
+          // Driver Email
+          if (driver.driverEmail) {
+            await transporter.sendMail({
+              from: `"EasyRide" <${conf.smtpEmailAddress.trim()}>`,
+              to: driver.driverEmail,
+              subject: "EasyRide – New Ride Assigned",
+              html: `
+                <div style="font-family: Arial, sans-serif; color: #1e293b; max-width: 600px; margin: auto; padding: 20px; border: 1px solid #e2e8f0; border-radius: 12px;">
+                  <h2 style="color: #2563eb; margin-bottom: 8px;">EasyRide – New Ride Assigned 🚗</h2>
+                  <p>Dear <strong>${driver.driverName}</strong>,</p>
+                  <p>You have been assigned a new ride <strong>#${booking.bookingCode}</strong>.</p>
+                  <div style="background-color: #f8fafc; border: 1px solid #e2e8f0; border-radius: 8px; padding: 16px; margin: 16px 0; line-height: 1.6;">
+                    <p style="margin: 4px 0;"><strong>Customer Name:</strong> ${customerName}</p>
+                    <p style="margin: 4px 0;"><strong>Customer Phone:</strong> <a href="tel:${customerPhone}" style="color: #2563eb; font-weight: bold;">${customerPhone}</a></p>
+                    <hr style="border: none; border-top: 1px solid #e2e8f0; margin: 12px 0;" />
+                    <p style="margin: 4px 0;"><strong>Pickup Location:</strong> ${booking.pickupPoint}</p>
+                    <p style="margin: 4px 0;"><strong>Drop Location:</strong> ${booking.dropPoint}</p>
+                    <p style="margin: 4px 0;"><strong>Date & Time:</strong> ${booking.bookingDate} at ${booking.bookingTime}</p>
+                    <p style="margin: 4px 0;"><strong>Vehicle:</strong> ${vehicleName} (${vehicleNumber})</p>
+                  </div>
+                  <p style="font-size: 13px; color: #64748b;">Please log in to your driver portal to start the trip when you arrive.</p>
+                </div>
+              `
+            });
+          }
+        }
+      } catch (mailErr) {
+        console.warn("Async email dispatch notice (non-fatal):", mailErr);
+      }
+    })();
+
+    return res.status(200).json({
+      success: true,
+      message: `Driver ${driver.driverName} assigned to booking successfully`,
+      data: updated
+    });
+
+  } catch (error: any) {
+    await transaction.rollback();
+    console.error("Assign Driver Error:", error);
+    return res.status(500).json({
+      success: false,
+      message: "Failed to assign driver",
+      error: error.message
+    });
+  }
+};
+
+// 3️⃣ Start Trip (Driver / Admin starts ride)
+export const startBookingTrip = async (req: Request, res: Response) => {
+  const transaction = await Booking.sequelize!.transaction();
+  try {
+    const bookingId = req.params.bookingId || req.body.bookingId;
+
+    if (!bookingId) {
+      await transaction.rollback();
+      return res.status(400).json({
+        success: false,
+        message: "Booking ID is required"
+      });
+    }
+
+    const booking = await Booking.findByPk(bookingId, { transaction });
+    if (!booking) {
+      await transaction.rollback();
+      return res.status(404).json({
+        success: false,
+        message: "Booking not found"
+      });
+    }
+
+    await booking.update(
+      {
+        confirmStatus: "Trip Started",
+        bookingStatus: "TRIP_STARTED",
+        startedAt: new Date()
+      },
+      { transaction }
+    );
+
+    if (booking.driverId) {
+      await Drivers.update(
+        { status: "ON_TRIP" },
+        { where: { driverId: booking.driverId }, transaction }
+      );
+    }
+
+    await transaction.commit();
+
+    const updated = await Booking.findByPk(bookingId, {
+      include: [
+        { model: User, as: "user", required: false },
+        { model: VehicleType, as: "vehicleType", required: false },
+        { model: Vehicle, as: "vehicle", required: false },
+        { model: Drivers, as: "driver", required: false }
+      ]
+    });
+
+    // Customer Notification: TRIP_STARTED (with duplicate check)
+    if (booking.userId) {
+      try {
+        const existingCustNotif = await CustomerNotification.findOne({
+          where: {
+            bookingId: booking.bookingId,
+            type: "TRIP_STARTED"
+          }
+        });
+        if (!existingCustNotif) {
+          await CustomerNotification.create({
+            userId: booking.userId,
+            bookingId: booking.bookingId,
+            type: "TRIP_STARTED",
+            title: "Trip Started 🚗",
+            message: `Your EasyRide trip #${booking.bookingCode} with ${updated?.driver?.driverName || "your driver"} is now in transit. Have a safe journey!`
+          });
+        }
+      } catch (custErr) {
+        console.warn("Trip Started customer notification notice:", custErr);
+      }
+    }
+
+    // Driver Notification: TRIP_STARTED
+    if (booking.driverId) {
+      try {
+        const existingDrvNotif = await DriverNotification.findOne({
+          where: {
+            bookingId: booking.bookingId,
+            driverId: booking.driverId,
+            type: "TRIP_STARTED"
+          }
+        });
+        if (!existingDrvNotif) {
+          await DriverNotification.create({
+            driverId: booking.driverId,
+            bookingId: booking.bookingId,
+            type: "TRIP_STARTED",
+            title: "Trip Started 🚗",
+            message: `Trip #${booking.bookingCode} is now in transit.`
+          });
+        }
+      } catch (drvErr) {
+        console.warn("Trip Started driver notification notice:", drvErr);
+      }
+    }
+
+    return res.status(200).json({
+      success: true,
+      message: "Trip started successfully",
+      data: updated
+    });
+  } catch (error: any) {
+    await transaction.rollback();
+    console.error("Start Trip Error:", error);
+    return res.status(500).json({
+      success: false,
+      message: "Failed to start trip",
+      error: error.message
+    });
+  }
+};
+
+// 4️⃣ Complete Trip (Completes ride, frees driver, finalizes fare, marks payment as PENDING)
+export const completeBookingTrip = async (req: Request, res: Response) => {
+  const transaction = await Booking.sequelize!.transaction();
+  try {
+    const bookingId = req.params.bookingId || req.body.bookingId;
+    const { actualDistanceKm } = req.body;
+
+    if (!bookingId) {
+      await transaction.rollback();
+      return res.status(400).json({
+        success: false,
+        message: "Booking ID is required"
+      });
+    }
+
+    const booking = await Booking.findByPk(bookingId, { transaction });
+    if (!booking) {
+      await transaction.rollback();
+      return res.status(404).json({
+        success: false,
+        message: "Booking not found"
+      });
+    }
+
+    // Compute or preserve authoritative final fare
+    let finalFareAmount = booking.finalFare;
+    let finalDistance = booking.distanceKm;
+
+    if (actualDistanceKm && Number(actualDistanceKm) > 0) {
+      finalDistance = Number(actualDistanceKm);
+      const dbBase = booking.baseFare || 250;
+      const dbKm = booking.perKmRate || 14;
+      const mult = (booking.roundTrip === "Yes" || booking.roundTrip === "roundtrip") ? 1.8 : 1.0;
+      finalFareAmount = Math.round(dbBase + (finalDistance * dbKm * mult));
+    }
+
+    await booking.update(
+      {
+        confirmStatus: "Completed",
+        bookingStatus: "TRIP_COMPLETED",
+        completedAt: new Date(),
+        distanceKm: finalDistance,
+        finalFare: finalFareAmount,
+        paymentStatus: "PENDING"
+      },
+      { transaction }
+    );
+
+    // Free the driver to AVAILABLE
+    if (booking.driverId) {
+      await Drivers.update(
+        { status: "AVAILABLE" },
+        { where: { driverId: booking.driverId }, transaction }
+      );
+    }
+
+    await transaction.commit();
+
+    const updated = await Booking.findByPk(bookingId, {
+      include: [
+        { model: User, as: "user", required: false },
+        { model: VehicleType, as: "vehicleType", required: false },
+        { model: Vehicle, as: "vehicle", required: false },
+        { model: Drivers, as: "driver", required: false }
+      ]
+    });
+
+    // Customer Notification: TRIP_COMPLETED (with duplicate check)
+    if (booking.userId) {
+      try {
+        const existingCustNotif = await CustomerNotification.findOne({
+          where: {
+            bookingId: booking.bookingId,
+            type: "TRIP_COMPLETED"
+          }
+        });
+        if (!existingCustNotif) {
+          await CustomerNotification.create({
+            userId: booking.userId,
+            bookingId: booking.bookingId,
+            type: "TRIP_COMPLETED",
+            title: "Trip Completed 🏁",
+            message: `Your EasyRide trip #${booking.bookingCode} is completed. Total Fare: ₹${finalFareAmount}. Please complete your post-ride payment.`
+          });
+        }
+      } catch (custErr) {
+        console.warn("Trip Completed customer notification notice:", custErr);
+      }
+    }
+
+    // Driver Notification: TRIP_COMPLETED
+    if (booking.driverId) {
+      try {
+        const existingDrvNotif = await DriverNotification.findOne({
+          where: {
+            bookingId: booking.bookingId,
+            driverId: booking.driverId,
+            type: "TRIP_COMPLETED"
+          }
+        });
+        if (!existingDrvNotif) {
+          await DriverNotification.create({
+            driverId: booking.driverId,
+            bookingId: booking.bookingId,
+            type: "TRIP_COMPLETED",
+            title: "Trip Completed 🏁",
+            message: `Trip #${booking.bookingCode} completed successfully. You are now AVAILABLE for new rides.`
+          });
+        }
+      } catch (drvErr) {
+        console.warn("Trip Completed driver notification notice:", drvErr);
+      }
+    }
+
+    return res.status(200).json({
+      success: true,
+      message: "Ride completed successfully. Final fare generated for customer payment.",
+      data: updated
+    });
+  } catch (error: any) {
+    await transaction.rollback();
+    console.error("Complete Trip Error:", error);
+    return res.status(500).json({
+      success: false,
+      message: "Failed to complete trip",
+      error: error.message
+    });
+  }
+};
+
+// 5️⃣ Customer Post-Ride Payment (Pay Now - Online or Cash)
+export const processCustomerPayment = async (req: Request, res: Response) => {
+  const transaction = await Booking.sequelize!.transaction();
+  try {
+    const bookingId = req.params.bookingId || req.body.bookingId;
+    const { paymentMethod = "Online", paymentTransactionId } = req.body;
+
+    if (!bookingId) {
+      await transaction.rollback();
+      return res.status(400).json({
+        success: false,
+        message: "Booking ID is required"
+      });
+    }
+
+    const booking = await Booking.findByPk(bookingId, { transaction });
+    if (!booking) {
+      await transaction.rollback();
+      return res.status(404).json({
+        success: false,
+        message: "Booking not found"
+      });
+    }
+
+    const isCash = String(paymentMethod).toLowerCase() === "cash";
+
+    if (isCash) {
+      await booking.update(
+        {
+          paymentMethod: "Cash",
+          paymentStatus: "PENDING"
+        },
+        { transaction }
+      );
+      await transaction.commit();
+
+      const updated = await Booking.findByPk(bookingId, {
+        include: [
+          { model: User, as: "user", required: false },
+          { model: VehicleType, as: "vehicleType", required: false },
+          { model: Vehicle, as: "vehicle", required: false },
+          { model: Drivers, as: "driver", required: false }
+        ]
+      });
+
+      return res.status(200).json({
+        success: true,
+        message: "Cash payment selected. Please hand payment to the driver upon ride completion.",
+        data: updated
+      });
+    }
+
+    // Online Payment Verified
+    const txnId = paymentTransactionId || `PAY-${Date.now()}-${Math.floor(1000 + Math.random() * 9000)}`;
+
+    await booking.update(
+      {
+        paymentStatus: "PAID",
+        paymentMethod: paymentMethod || "Online",
+        paymentTransactionId: txnId,
+        paidAt: new Date()
+      },
+      { transaction }
+    );
+
+    await transaction.commit();
+
+    const updated = await Booking.findByPk(bookingId, {
+      include: [
+        { model: User, as: "user", required: false },
+        { model: VehicleType, as: "vehicleType", required: false },
+        { model: Vehicle, as: "vehicle", required: false },
+        { model: Drivers, as: "driver", required: false }
+      ]
+    });
+
+    // Customer Notification: PAYMENT_SUCCESS
+    if (booking.userId) {
+      try {
+        const existingCustNotif = await CustomerNotification.findOne({
+          where: {
+            bookingId: booking.bookingId,
+            type: "PAYMENT_SUCCESS"
+          }
+        });
+        if (!existingCustNotif) {
+          await CustomerNotification.create({
+            userId: booking.userId,
+            bookingId: booking.bookingId,
+            type: "PAYMENT_SUCCESS",
+            title: "Payment Successful 💳",
+            message: `Payment of ₹${booking.finalFare} for Booking #${booking.bookingCode} was verified successfully. Thank you for choosing EasyRide!`
+          });
+        }
+      } catch (custErr) {
+        console.warn("Payment success notification notice:", custErr);
+      }
+    }
+
+    return res.status(200).json({
+      success: true,
+      message: "Payment verified successfully. Ride is fully paid!",
+      data: updated
+    });
+  } catch (error: any) {
+    await transaction.rollback();
+    console.error("Process Payment Error:", error);
+    return res.status(500).json({
+      success: false,
+      message: "Payment processing failed",
+      error: error.message
+    });
+  }
+};
+
+// 6️⃣ Admin Marks Cash Payment as Received / Paid
+export const markAdminCashPaymentPaid = async (req: Request, res: Response) => {
+  try {
+    const bookingId = req.params.bookingId || req.body.bookingId;
+
+    if (!bookingId) {
+      return res.status(400).json({
+        success: false,
+        message: "Booking ID is required"
+      });
+    }
+
+    const booking = await Booking.findByPk(bookingId);
+    if (!booking) {
+      return res.status(404).json({
+        success: false,
+        message: "Booking not found"
+      });
+    }
+
+    await booking.update({
+      paymentStatus: "PAID",
+      paymentMethod: "Cash",
+      paidAt: new Date()
+    });
+
+    const updated = await Booking.findByPk(bookingId, {
+      include: [
+        { model: User, as: "user", required: false },
+        { model: VehicleType, as: "vehicleType", required: false },
+        { model: Vehicle, as: "vehicle", required: false },
+        { model: Drivers, as: "driver", required: false }
+      ]
+    });
+
+    return res.status(200).json({
+      success: true,
+      message: "Cash payment marked as PAID successfully.",
+      data: updated
+    });
+  } catch (error: any) {
+    console.error("Mark Cash Paid Error:", error);
+    return res.status(500).json({
+      success: false,
+      message: "Failed to mark cash payment as paid",
+      error: error.message
+    });
+  }
+};
+
+// 7️⃣ Customer Notification APIs
+export const getCustomerNotifications = async (req: Request, res: Response) => {
+  try {
+    const userId = req.params.userId || (req as any).user?.userId;
+
+    if (!userId) {
+      return res.status(400).json({
+        success: false,
+        message: "User ID is required"
+      });
+    }
+
+    const notifications = await CustomerNotification.findAll({
+      where: { userId },
+      include: [
+        {
+          model: Booking,
+          as: "booking",
+          required: false,
+          include: [
+            { model: Drivers, as: "driver", required: false },
+            { model: Vehicle, as: "vehicle", required: false }
+          ]
+        }
+      ],
+      order: [["createdAt", "DESC"]],
+      limit: 50
+    });
+
+    const unreadCount = await CustomerNotification.count({
+      where: { userId, isRead: false }
+    });
+
+    return res.status(200).json({
+      success: true,
+      unreadCount,
+      data: notifications
+    });
+  } catch (error: any) {
+    console.error("Get Customer Notifications Error:", error);
+    return res.status(500).json({
+      success: false,
+      message: "Failed to fetch customer notifications",
+      error: error.message
+    });
+  }
+};
+
+export const markCustomerNotificationRead = async (req: Request, res: Response) => {
+  try {
+    const { notificationId } = req.params;
+    const notif = await CustomerNotification.findByPk(notificationId);
+    if (!notif) {
+      return res.status(404).json({
+        success: false,
+        message: "Notification not found"
+      });
+    }
+    await notif.update({ isRead: true });
+    return res.status(200).json({
+      success: true,
+      message: "Notification marked as read"
+    });
+  } catch (error: any) {
+    console.error("Mark Notification Read Error:", error);
+    return res.status(500).json({
+      success: false,
+      message: "Failed to update notification status",
+      error: error.message
+    });
+  }
+};
+
+export const markAllCustomerNotificationsRead = async (req: Request, res: Response) => {
+  try {
+    const userId = req.params.userId || (req as any).user?.userId;
+    if (!userId) {
+      return res.status(400).json({
+        success: false,
+        message: "User ID is required"
+      });
+    }
+    await CustomerNotification.update({ isRead: true }, { where: { userId } });
+    return res.status(200).json({
+      success: true,
+      message: "All customer notifications marked as read"
+    });
+  } catch (error: any) {
+    console.error("Mark All Notifications Read Error:", error);
+    return res.status(500).json({
+      success: false,
+      message: "Failed to mark notifications as read",
+      error: error.message
+    });
+  }
+};
+
+
 
 

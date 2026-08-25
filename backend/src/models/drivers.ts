@@ -153,6 +153,14 @@ export class Drivers extends Model {
   @Column(DataType.DATE)
   createdAt!: Date;
   
+  @Column({
+    type: DataType.STRING,
+    defaultValue: 'AVAILABLE',
+    allowNull: true,
+  })
+  status!: string;
+
   @HasMany(() => Booking)
   bookings!: Booking[];
 }
+

@@ -8,7 +8,8 @@ import {
   faMoneyBillWave,
   faSignOutAlt,
   faShieldAlt,
-  faIdCard
+  faIdCard,
+  faChartBar
 } from '@fortawesome/free-solid-svg-icons';
 import { NavLink, useNavigate } from 'react-router-dom';
 
@@ -50,7 +51,13 @@ const NAV_ITEMS: NavItem[] = [
     path: '/pricing',
     icon: faMoneyBillWave,
   },
+  {
+    label: 'Reports',
+    path: '/reports',
+    icon: faChartBar,
+  },
 ];
+
 
 
 const Sidebar: React.FC = () => {

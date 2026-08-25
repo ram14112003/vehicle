@@ -84,6 +84,8 @@ import InvoicePayHolder from './SuperAdmin/pages/Invoice/InvoicePayHolder';
 import OrderSummary from './SuperAdmin/pages/Reports/OrderSummary';
 import CompanyOrderSummary from './SuperAdmin/pages/Reports/CompanyOrderSummary';
 import OverallInvoiceReport from './SuperAdmin/pages/Reports/OverallInvoiceReport';
+import Reports from './SuperAdmin/pages/Reports/Reports';
+
 
 // Cache
 import Cache from './SuperAdmin/pages/Cache/Cache';
@@ -252,9 +254,11 @@ const Layout = () => {
           <Route path="/invoice/payholder" element={<InvoicePayHolder />} />
           <Route path="/paymentsuccess" element={<PaymentSuccess/>} />
           {/* Reports Routes */}
+          <Route path="/reports" element={<Reports />} />
           <Route path="/reports/order-summary" element={<OrderSummary />} />
           <Route path="/reports/company-order-summary" element={<CompanyOrderSummary />} />
           <Route path="/reports/overall-invoice-report" element={<OverallInvoiceReport />} />
+
           {/* Cache Route */}
           <Route path="/cache" element={<Cache />} />
           <Route path="/uploads" element={<UploadUsers />} />

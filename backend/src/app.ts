@@ -39,8 +39,10 @@ import emailConfRoutes from "./routes/emailConfRoutes";
 import paymentRoutes from "./routes/paymentRoutes";
 import redirectRoute from './routes/redirectRoute';
 import onCallRoutes from './routes/onCallRoutes';
+import reportRoutes from './routes/reportRoutes';
 
 import downloadPdf from './routes/downloadPdf';
+
 
 import config from "../src/config/config"; 
 
@@ -172,6 +174,8 @@ app.use('/api/emailConfRoutes',emailConfRoutes );
 
 app.use('/api/paymentRoutes',paymentRoutes);
 app.use('/api/oncallinvoice',onCallRoutes);
+app.use('/api/reports', reportRoutes);
 // Short redirect route for SMS short codes
 
 export default app;
+

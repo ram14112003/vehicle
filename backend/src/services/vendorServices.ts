@@ -232,14 +232,14 @@ const company = await Company.findOne({ where:  { companyId: userData?.companyId
     try {
       await sendSmsNotifications({ booking, user, driver, vehicle, formattedBookingDate, shouldSendSms });
     } catch (smsErr: any) {
-      console.error('SMS send error:', smsErr);
-      return res.status(500).json({ error: 'Internal server error' });
+      console.warn('SMS send notice (non-fatal):', smsErr);
     }
 
     return res.status(200).json({
       message: 'Booking confirmed successfully',
       updateConfirm
     });
+
 
   } catch (err) {
     console.error('Update Confirm Status Error:', err);
@@ -411,8 +411,7 @@ export const confirmBookingforWeb = async (req: any, res: Response) => {
         shouldSendSms,
       });
     } catch (smsErr: any) {
-      console.error("SMS send error:", smsErr);
-      return res.status(500).json({ error: "Internal server error" });
+      console.warn("SMS send notice (non-fatal):", smsErr);
     }
 
     return res.status(200).json({
@@ -420,6 +419,7 @@ export const confirmBookingforWeb = async (req: any, res: Response) => {
       updateConfirm,
       stored: { vehicleId, vehicleMasterId }, // ✅ for quick verify
     });
+
   } catch (err) {
     console.error("Update Confirm Status Error:", err);
     return res.status(500).json({ error: "Internal server error" });
@@ -951,11 +951,11 @@ export const updateBookingVehicleDriver = async (req: any, res: Response) => {
         shouldSendSms,
       });
     } catch (smsErr: any) {
-      console.error("SMS send error:", smsErr);
-      return res.status(500).json({ error: "Internal server error" });
+      console.warn("SMS send notice (non-fatal):", smsErr);
     }
 
     return res.status(200).json({
+
       message: "Booking updated with new vehicle & driver. Notifications sent to driver.",
       updateBooking,
       stored: { vehicleId, vehicleMasterId },

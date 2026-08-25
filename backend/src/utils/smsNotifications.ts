@@ -1,4 +1,5 @@
 import { createShortCode } from "./shortLinkStore";
+import { maskPhoneNumber, normalizePhoneNumberForSms } from "../services/smsServices";
 
 type BookingAny = any;
 
@@ -11,10 +12,13 @@ function getDirectionsUrl(pickupArea: string, dropPoint: string): string {
 
 // Send SMS helper
 async function sendSmsVia2Factor(url: string, tag: string) {
-  console.log(`[SMS][${tag}] → ${url}`);
-  const resp = await fetch(url);
-  const text = await resp.text();
-  return { ok: resp.ok, body: text };
+  try {
+    const resp = await fetch(url);
+    const text = await resp.text();
+    return { ok: resp.ok, body: text };
+  } catch (err: any) {
+    return { ok: false, body: err.message };
+  }
 }
 
 export async function sendSmsNotifications(options: {
@@ -25,121 +29,149 @@ export async function sendSmsNotifications(options: {
   formattedBookingDate?: string;
   shouldSendSms: boolean;
 }) {
-  const { booking, user, driver, vehicle, formattedBookingDate, shouldSendSms } = options;
+  const { booking, user, driver, vehicle, formattedBookingDate } = options;
 
-//  if (!shouldSendSms) return { skipped: true };
+  const apiKey = process.env.TWO_FACTOR_API_KEY || process.env.TWOFACTOR_API_KEY;
+  const senderId = process.env.TWO_FACTOR_SENDER_ID || process.env.TWOFACTOR_SENDER_ID || "EASYRD";
+  if (!apiKey || !senderId) {
+    console.warn("[SMS] Configuration missing. Skipping SMS notifications.");
+    return { skipped: true };
+  }
 
-  const apiKey = process.env.TWO_FACTOR_API_KEY;
-  const senderId = process.env.TWO_FACTOR_SENDER_ID;
-  if (!apiKey || !senderId) throw new Error("SMS API configuration missing");
-
-  // Create short Google Maps direction code
+  // Create short Google Maps direction code safely
   const pickupLabel = booking?.pickupArea || booking?.pickupPoint || "Pickup";
   const dropLabel = booking?.dropPoint || booking?.dropLocation || "Drop";
   const longUrl = getDirectionsUrl(pickupLabel, dropLabel);
 
-  const directionsCode = await createShortCode(longUrl, 8);
-  console.log("Short code:", directionsCode);
-  console.log("hello guest ",booking.behalfOfName, booking.behalfOfPhone);
-  // ---------------- DRIVER SMS ----------------
-  if (driver?.phno && booking.behalfOfPhone) {
-    const url = 
-      `https://2factor.in/API/R1/?module=TRANS_SMS` +
-      `&apikey=${apiKey}` +
-      `&to=${driver.phno}` +
-      `&from=${senderId}` +
-      `&templatename=Driver%20Assigning` +
-      `&var1=${encodeURIComponent(driver.driverName || "")}` +
-      `&var2=${encodeURIComponent(booking.behalfOfName || "")}` +
-      `&var3=${encodeURIComponent(booking.behalfOfPhone || "")}` +
-      `&var4=${encodeURIComponent('?l='+directionsCode)}`;
-
-    const r = await sendSmsVia2Factor(url, "driver");
-    if (!r.ok) throw new Error("Driver SMS failed");
-  }
-  else if (driver?.phno) {
-    const url = 
-      `https://2factor.in/API/R1/?module=TRANS_SMS` +
-      `&apikey=${apiKey}` +
-      `&to=${driver.phno}` +
-      `&from=${senderId}` +
-      `&templatename=Driver%20Assigning` +
-      `&var1=${encodeURIComponent(driver.driverName || "")}` +
-      `&var2=${encodeURIComponent(user.username || "")}` +
-      `&var3=${encodeURIComponent(user.mobile || "")}` +
-      `&var4=${encodeURIComponent('?l='+directionsCode)}`;
-
-    const r = await sendSmsVia2Factor(url, "driver");
-    if (!r.ok) throw new Error("Driver SMS failed");
+  let directionsCode = "";
+  try {
+    directionsCode = await createShortCode(longUrl, 8);
+  } catch (codeErr) {
+    directionsCode = "map";
   }
 
-  // ---------------- USER SMS ----------------
-  if (user?.mobile) {
-    // const vehicleNumber =
-    //   booking?.vehicle?.VehicleMaster?.vehicleNumber ||
-    //   booking?.vehicleNumber ||
-    //   "Not provided";
-    const vehicleNumber =
-  booking?.vehicle?.vehicleMaster?.vehicleNumber ??
-  vehicle?.vehicleMaster?.vehicleNumber ??
-  booking?.vehicleNumber ??
-  vehicle?.vehicleNumber ??
-  "Not provided";
+  const customerName = user?.username || booking?.riderName || booking?.behalfOfName || "Customer";
+  const customerPhoneRaw = user?.mobile || booking?.riderPhone || booking?.behalfOfPhone || "";
+  const driverPhoneRaw = driver?.phno || driver?.phone || driver?.mobile || "";
+  const driverName = driver?.driverName || "Driver";
 
-    const url =
-      `https://2factor.in/API/R1/?module=TRANS_SMS` +
-      `&apikey=${apiKey}` +
-      `&to=${user.mobile}` +
-      `&from=${senderId}` +
-      `&templatename=Booking%20Confimation%20Message` +
-      `&var1=${encodeURIComponent(user.username || "")}` +
-      `&var2=${encodeURIComponent(booking.bookingCode || "")}` +
-      `&var3=${encodeURIComponent('?l='+directionsCode)}` +
-      `&var4=${encodeURIComponent(formattedBookingDate || "")}` +
-      `&var5=${encodeURIComponent(driver?.driverName || "")}` +
-      `&var6=${encodeURIComponent(driver?.phno || "")}` +
-      `&var7=${encodeURIComponent(vehicle?.vehicleName || "")}` +
-      `&var8=${encodeURIComponent(vehicleNumber)}` +
-      `&var9=${encodeURIComponent("EasyRide")}` +
-      `&var10=${encodeURIComponent("9003241571")}`;
+  const vehicleNumber =
+    booking?.vehicle?.vehicleMaster?.vehicleNumber ??
+    vehicle?.vehicleMaster?.vehicleNumber ??
+    booking?.vehicleNumber ??
+    vehicle?.vehicleNumber ??
+    "Not provided";
+
+  const vehicleName = vehicle?.vehicleName || booking?.preferredType || "Cab";
+
+  const result = {
+    customerSms: false,
+    driverSms: false,
+  };
+
+  // ==========================================
+  // 1. INDEPENDENT DRIVER SMS
+  // ==========================================
+  try {
+    const driverPhoneNorm = normalizePhoneNumberForSms(driverPhoneRaw);
+    if (driverPhoneNorm.valid) {
+      console.log(`\nDriver SMS attempt started\nBooking: ${booking?.bookingCode || booking?.bookingId}\nDriver ID: ${driver?.driverId || 'N/A'}\nRecipient: ${maskPhoneNumber(driverPhoneRaw)}`);
+
+      const guestOrUserName = booking?.behalfOfName || customerName;
+      const guestOrUserPhone = booking?.behalfOfPhone || customerPhoneRaw;
+      const bookingCode = booking?.bookingCode || booking?.bookingId || '';
+
+      const url =
+        `https://2factor.in/API/R1/?module=TRANS_SMS` +
+        `&apikey=${apiKey}` +
+        `&to=${driverPhoneNorm.normalizedPhone}` +
+        `&from=${senderId}` +
+        `&templatename=Driver%20Assigning` +
+        `&var1=${encodeURIComponent(driverName)}` +
+        `&var2=${encodeURIComponent(`${guestOrUserName} (Booking: ${bookingCode})`)}` +
+        `&var3=${encodeURIComponent(guestOrUserPhone)}` +
+        `&var4=${encodeURIComponent(`Pickup: ${pickupLabel} | Drop: ${dropLabel} | Date: ${formattedBookingDate || ''} | Vehicle: ${vehicleName} (${vehicleNumber})`)}`;
 
 
-    const r = await sendSmsVia2Factor(url, "user");
-    if (!r.ok) throw new Error("User SMS failed");
+      const r = await sendSmsVia2Factor(url, "driver");
+      if (r.ok) {
+        console.log("Driver SMS sent successfully\nStatus: Success");
+        result.driverSms = true;
+      } else {
+        console.warn(`Driver SMS failed:\n${r.body || 'Provider rejected request'}`);
+      }
+    } else {
+      console.warn(`Driver SMS failed:\n${driverPhoneNorm.error || 'Invalid driver phone'}`);
+    }
+  } catch (driverSmsErr: any) {
+    console.error(`Driver SMS failed:\n${driverSmsErr.message || driverSmsErr}`);
   }
 
-    if (booking.behalfOfPhone) {
-      console.log("in f ",booking.behalfOfPhone);
-    // const vehicleNumber =
-    //   booking?.vehicle?.VehicleMaster?.vehicleNumber ||
-    //   booking?.vehicleNumber ||
-    //   "Not provided";
-    const vehicleNumber =
-  booking?.vehicle?.vehicleMaster?.vehicleNumber ??
-  vehicle?.vehicleMaster?.vehicleNumber ??
-  booking?.vehicleNumber ??
-  vehicle?.vehicleNumber ??
-  "Not provided";
+  // ==========================================
+  // 2. INDEPENDENT USER / CUSTOMER SMS
+  // ==========================================
+  try {
+    const customerPhoneNorm = normalizePhoneNumberForSms(customerPhoneRaw);
+    if (customerPhoneNorm.valid) {
+      console.log(`\nCustomer SMS attempt started\nBooking: ${booking?.bookingCode || booking?.bookingId}\nRecipient: ${maskPhoneNumber(customerPhoneRaw)}`);
 
-    const url =
-      `https://2factor.in/API/R1/?module=TRANS_SMS` +
-      `&apikey=${apiKey}` +
-      `&to=${booking.behalfOfPhone}` +
-      `&from=${senderId}` +
-      `&templatename=BookingConfirmGuest` +
-      `&var1=${encodeURIComponent(booking.behalfOfName || "")}` +
-      `&var2=${encodeURIComponent(driver?.driverName || "")}` +
-      `&var3=${encodeURIComponent(driver?.phno || "")}` +
-      `&var4=${encodeURIComponent(vehicle?.vehicleName || "")}` +
-      `&var5=${encodeURIComponent(vehicleNumber)}` +
-      `&var6=${encodeURIComponent(formattedBookingDate || "")}` +
-      `&var7=${encodeURIComponent("EasyRide")}` +
-      `&var8=${encodeURIComponent("9003241571")}`;
+      const companySupportPhone = process.env.SUPPORT_PHONE || process.env.COMPANY_PHONE || "";
+
+      let url = "";
+      if (booking?.behalfOfPhone) {
+        url =
+          `https://2factor.in/API/R1/?module=TRANS_SMS` +
+          `&apikey=${apiKey}` +
+          `&to=${customerPhoneNorm.normalizedPhone}` +
+          `&from=${senderId}` +
+          `&templatename=BookingConfirmGuest` +
+          `&var1=${encodeURIComponent(booking.behalfOfName || customerName)}` +
+          `&var2=${encodeURIComponent(driverName)}` +
+          `&var3=${encodeURIComponent(driverPhoneRaw)}` +
+          `&var4=${encodeURIComponent(vehicleName)}` +
+          `&var5=${encodeURIComponent(vehicleNumber)}` +
+          `&var6=${encodeURIComponent(formattedBookingDate || "")}` +
+          `&var7=${encodeURIComponent("EasyRide")}` +
+          `&var8=${encodeURIComponent(companySupportPhone)}`;
+      } else {
+        url =
+          `https://2factor.in/API/R1/?module=TRANS_SMS` +
+          `&apikey=${apiKey}` +
+          `&to=${customerPhoneNorm.normalizedPhone}` +
+          `&from=${senderId}` +
+          `&templatename=Booking%20Confimation%20Message` +
+          `&var1=${encodeURIComponent(customerName)}` +
+          `&var2=${encodeURIComponent(booking?.bookingCode || "")}` +
+          `&var3=${encodeURIComponent('?l=' + directionsCode)}` +
+          `&var4=${encodeURIComponent(formattedBookingDate || "")}` +
+          `&var5=${encodeURIComponent(driverName)}` +
+          `&var6=${encodeURIComponent(driverPhoneRaw)}` +
+          `&var7=${encodeURIComponent(vehicleName)}` +
+          `&var8=${encodeURIComponent(vehicleNumber)}` +
+          `&var9=${encodeURIComponent("EasyRide")}` +
+          `&var10=${encodeURIComponent(companySupportPhone)}`;
+      }
 
 
-    const r = await sendSmsVia2Factor(url, "user");
-    if (!r.ok) throw new Error("User SMS failed");
+      const r = await sendSmsVia2Factor(url, "user");
+      if (r.ok) {
+        console.log("Customer SMS sent successfully\nStatus: Success");
+        result.customerSms = true;
+      } else {
+        console.warn(`Customer SMS failed:\n${r.body || 'Provider rejected request'}`);
+      }
+    } else {
+      console.warn(`Customer SMS failed:\n${customerPhoneNorm.error || 'Invalid customer phone'}`);
+    }
+  } catch (userSmsErr: any) {
+    console.error(`Customer SMS failed:\n${userSmsErr.message || userSmsErr}`);
   }
 
-  return { skipped: false };
+  console.log(`\n================ SMS DELIVERY REPORT ================`);
+  console.log(`Booking: ${booking?.bookingCode || booking?.bookingId}`);
+  console.log(`Customer SMS: ${result.customerSms ? 'SUCCESS' : 'FAILED'}`);
+  console.log(`Driver SMS: ${result.driverSms ? 'SUCCESS' : 'FAILED'}`);
+  console.log(`=====================================================\n`);
+
+  return { skipped: false, ...result };
 }

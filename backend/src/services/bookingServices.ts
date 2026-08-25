@@ -10,10 +10,12 @@ import { USERS } from "../utils/costants";
 import { ORDER } from '../utils/costants';
 import { ClosePending, Employee, Invoice, PackageData, PaymentMode, Tax, User, Configuration } from '../models';
 import { Payment } from "../models/payment";
-import { Drivers, Vendor, VehicleMaster, DriverNotification, CustomerNotification } from '../models';
+import { Drivers, Vendor, VehicleMaster, DriverNotification, CustomerNotification, SmsLog } from '../models';
 import { Company } from "../models/company";
 import { Op, fn, col, literal } from "sequelize";
 import nodemailer from "nodemailer";
+import { sendDriverAllocationTwoWaySms } from './smsServices';
+
 
 
 const { ROLES } = USERS;
@@ -5164,11 +5166,12 @@ export const assignDriverToBooking = async (req: Request, res: Response) => {
       ]
     });
 
-    const customerName = updated?.user?.username || (booking as any).riderName || booking.behalfOfName || "Valued Customer";
+    const customerName = updated?.user?.username || (booking as any).riderName || booking.behalfOfName || "";
     const customerPhone = updated?.user?.mobile || (booking as any).riderPhone || booking.behalfOfPhone || "";
     const customerEmail = updated?.user?.email || (booking as any).email || "";
-    const vehicleName = updated?.vehicle?.vehicleName || updated?.vehicleType?.vehicleType || booking.preferredType || "Sedan";
-    const vehicleNumber = (updated?.vehicle as any)?.vehicleNo || (updated as any)?.vehicle?.vehicleMaster?.vehicleNumber || (booking as any).vehicleNumber || "TN 76 AB 1234";
+    const vehicleName = updated?.vehicle?.vehicleName || updated?.vehicleType?.vehicleType || booking.preferredType || "";
+    const vehicleNumber = (updated?.vehicle as any)?.vehicleNo || (updated as any)?.vehicle?.vehicleMaster?.vehicleNumber || (booking as any).vehicleNumber || "";
+
 
 
     // 1. Customer Notification (with duplicate prevention)
@@ -5291,11 +5294,28 @@ export const assignDriverToBooking = async (req: Request, res: Response) => {
       }
     })();
 
+    // 4. Asynchronous, Non-Blocking Two-Way SMS Dispatch (Customer & Driver)
+    (async () => {
+      try {
+        await sendDriverAllocationTwoWaySms({
+          booking,
+          driver,
+          customerName,
+          customerPhone,
+          vehicleName,
+          vehicleNumber
+        });
+      } catch (smsErr) {
+        console.warn("[Two-Way SMS Dispatch Notice (non-fatal)]:", smsErr);
+      }
+    })();
+
     return res.status(200).json({
       success: true,
       message: `Driver ${driver.driverName} assigned to booking successfully`,
       data: updated
     });
+
 
   } catch (error: any) {
     await transaction.rollback();

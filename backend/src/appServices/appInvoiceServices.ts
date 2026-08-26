@@ -4,6 +4,7 @@ import { Request, Response } from 'express';
 import puppeteer from 'puppeteer';
 import path from 'path';
 import fs from 'fs';
+import { Op } from 'sequelize';
 import { Booking } from '../models/booking';
 import { Vehicle } from '../models/vehicle';
 import { VehicleType } from '../models/vehicleType';
@@ -14,6 +15,7 @@ import { Drivers, VehicleMaster, PackageData } from '../models';
 import { Company } from "../models/company";
 import { ORDER, USERS } from "../utils/costants";
 import jwt from "jsonwebtoken";
+
 
 const JWT_SECRET = process.env.JWT_SECRET || "supersecret";
 const BASE_URL = process.env.API_BASE_URL || "https://gracecabs.com";
@@ -924,9 +926,9 @@ const closePending = invoice?.closePending;
     ? booking?.company   // ✅ from booking.companyId
     : user?.company;     // ✅ fallback
   const vehicle = booking.vehicle;
-  //const vehicleMaster = booking?.vehicleMaster;
-  const vehicleMaster = booking?.vehicleMaster;
+  const vehicleMaster = booking?.vehicleMaster || booking?.vehicle?.vehicleMaster;
 console.log("iiiiii ",invoice, " cccc ",closePending);
+
 console.log("🔍 VEHICLE DEBUG CHECK", {
   // Direct Booking → VehicleMaster
   booking_vehicleMaster: booking.vehicleMaster,
@@ -1035,13 +1037,13 @@ return {
     customerAddress: `${company?.companyName || ''}\n${company?.companyAddress || user?.userAddress || ''}`,
     gstNo: company?.gstNo || 'N/A',
     city: `${user?.city || ''} - ${user?.pinCode || ''}`,
-    state: user?.state || '',
-    country: user?.country || '',
     orderNumber: booking?.bookingCode || `#${booking.bookingId}`,
     pickupPoint: booking?.pickupPoint,
-    vehicleType: vehicleMaster?.vehicleModelName ||'N/A',
-    vehicleNumber:vehicleMaster?.vehicleNumber ||'N/A',
+    vehicleType: vehicleMaster?.vehicleModelName || booking.vehicle?.vehicleName || 'Standard Vehicle',
+    vehicleNumber: vehicleMaster?.vehicleNumber || (booking as any)?.vehicleNumber || 'Not Added',
     pickupDate: formatDate(booking?.bookingDate),
+
+
     bookedby:booking?.behalfOfName,
     companyName:company?.companyName,
     companyaddress:company?.companyAddress,
@@ -1149,23 +1151,36 @@ attributes: ["userId", "username", "email"]    },
       });
     }
 
-        let correctVehicleMaster = null;
+    let correctVehicleMaster = null;
 
     if (booking.vehicleMasterId) {
-      correctVehicleMaster = await VehicleMaster.findByPk(
-        booking.vehicleMasterId,
-        {
-          attributes: [
-            "vehicleMasterId",
-            "vehicleNumber",
-            "vehicleModelName",
-            "vehicleType",
-          ],
-        }
-      );
+      correctVehicleMaster = await VehicleMaster.findByPk(booking.vehicleMasterId);
     }
+    if (!correctVehicleMaster && booking.vehicleId) {
+      correctVehicleMaster = await VehicleMaster.findOne({ where: { vehicleId: booking.vehicleId, isDeleted: 0 } });
+    }
+    if (!correctVehicleMaster && (booking.vehicleTypeId || booking.vehicle?.vehicleTypeId)) {
+      const vTypeId = booking.vehicleTypeId || booking.vehicle?.vehicleTypeId;
+      correctVehicleMaster = await VehicleMaster.findOne({ where: { vehicleTypeId: vTypeId, isDeleted: 0 } });
+    }
+    if (!correctVehicleMaster && (booking.vehicle?.vehicleName || booking.preferredType)) {
+      const vName = booking.vehicle?.vehicleName || booking.preferredType;
+      correctVehicleMaster = await VehicleMaster.findOne({
+        where: {
+          [Op.or]: [
+            { vehicleModelName: vName },
+            { vehicleType: vName }
+          ],
+          isDeleted: 0
+        }
+      });
+    }
+
     //  Log vehicle data
-        (booking as any).vehicleMaster = correctVehicleMaster;
+    if (correctVehicleMaster) {
+      (booking as any).vehicleMaster = correctVehicleMaster;
+    }
+
 
     console.log("✅ PDF VEHICLE ATTACHED", {
       vehicleMasterId: booking.vehicleMasterId,

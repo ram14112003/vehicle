@@ -95,30 +95,39 @@ export const updateVehicleMaster = async (req: any, res: Response) => {
       if (o) resolvedVendorName = o.vendorName;
     }
 
-     if (vehicleNumber) {
-  const existing = await VehicleMaster.findOne({
-    where: {
-      vehicleNumber: vehicleNumber,
-vehicleMasterId: { [Op.ne]: id },
-    },
-  });
+    if (vehicleNumber && typeof vehicleNumber === 'string') {
+      const trimmedNumber = vehicleNumber.trim().toUpperCase();
+      const normalizedNumber = trimmedNumber.replace(/\s+/g, '');
 
-  if (existing) {
-    return res.status(400).json({
-      message: "VehicleNumber already exists",
-    });
-  }
-}
+      const allExisting = await VehicleMaster.findAll({
+        where: {
+          isDeleted: 0,
+          vehicleMasterId: { [Op.ne]: id }
+        }
+      });
 
+      const duplicate = allExisting.find(
+        v => (v.vehicleNumber || '').toUpperCase().replace(/\s+/g, '') === normalizedNumber
+      );
+
+      if (duplicate) {
+        return res.status(400).json({
+          message: `Vehicle number "${trimmedNumber}" is already assigned to another vehicle`,
+        });
+      }
+    }
+
+    const cleanVehicleNumber = vehicleNumber ? String(vehicleNumber).trim().toUpperCase() : vm.vehicleNumber;
 
     await vm.update({
-      vehicleNumber: vehicleNumber ?? vm.vehicleNumber,
+      vehicleNumber: cleanVehicleNumber,
       vehicleId:     vehicleId     ?? vm.vehicleId,
       vehicleModelName: resolvedModelName,    //  correct column
       vehicleType:      resolvedTypeName,     //  stored as string in VehicleMaster
       vendorId:          vendorId     ?? vm.vendorId,
       vendorName:        resolvedVendorName,    //  correct column
     });
+
 
     return res.status(200).json({ message: "Vehicle updated successfully", data: vm });
   } catch (err) {

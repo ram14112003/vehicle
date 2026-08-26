@@ -281,12 +281,13 @@ export async function sendDriverAllocationTwoWaySms(payload: DriverAllocationSms
 Booking: ${bookingCode}
 Driver: ${driverName}
 Phone: ${driverPhone}
-Vehicle: ${vehicleName}
-Vehicle No: ${vehicleNumber}
+Vehicle: ${vehicleName || 'Standard'}
+Vehicle No: ${vehicleNumber || 'Not Added'}
 Pickup: ${pickupPoint}
 Drop: ${dropPoint}
 Date: ${bookingDate}
 Time: ${bookingTime}`;
+
 
       if (!phoneValidation.valid) {
         console.warn(`Customer SMS failed:\n${phoneValidation.error || 'Invalid phone number'}`);
@@ -453,15 +454,16 @@ Time:
 ${bookingTime}
 
 Vehicle:
-${vehicleName}
+${vehicleName || 'Standard'}
 
 Vehicle No:
-${vehicleNumber}
+${vehicleNumber || 'Not Added'}
 
 Please pick up the customer on time.
 
 Call Customer:
 ${customerPhone}`;
+
 
       if (!phoneValidation.valid) {
         console.warn(`Driver SMS failed:\n${phoneValidation.error || 'Invalid driver phone number'}`);

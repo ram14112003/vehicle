@@ -168,95 +168,113 @@ case 'drivers': {
 
         break;
       }
-      case 'vehicle':
-  const isDeletedFilter = req.query.isDeleted === '1';
+      case 'vehicle': {
+        const isDeletedFilter = req.query.isDeleted === '1';
 
-  result = await Vehicle.findAll({
-    where: {
-      isDeleted: isDeletedFilter,
-      [Op.or]: [
-        { vehicleName: { [Op.like]: `%${keyword}%` } },
-        { availableStatus: { [Op.like]: `%${keyword}%` } },
-        { vehicleImg: { [Op.like]: `%${keyword}%` } },
-        { localPerHour: { [Op.like]: `%${keyword}%` } },
-        { localPerKm: { [Op.like]: `%${keyword}%` } },
-        { OutstationPerKm: { [Op.like]: `%${keyword}%` } },
-        { OSDriverBata: { [Op.like]: `%${keyword}%` } },
-      ],
-    },
-    include: [
-      {
-        model: VehicleType,
-        where: {
-          vehicleType: { [Op.like]: `%${keyword}%` }
-        },
-        required: false, // still return results even if vehicleType doesn't match
-        attributes: ['vehicleTypeId', 'vehicleType']
+        result = await Vehicle.findAll({
+          where: {
+            isDeleted: isDeletedFilter,
+            [Op.or]: [
+              { vehicleName: { [Op.like]: `%${keyword}%` } },
+              { availableStatus: { [Op.like]: `%${keyword}%` } },
+              { manufacturing: { [Op.like]: `%${keyword}%` } },
+              { '$vehicleMaster.vehicleNumber$': { [Op.like]: `%${keyword}%` } },
+            ],
+          },
+          include: [
+            {
+              model: VehicleType,
+              as: 'vehicleType',
+              required: false,
+              attributes: ['vehicleTypeId', 'vehicleType']
+            },
+            {
+              model: VehicleMaster,
+              as: 'vehicleMaster',
+              required: false,
+              attributes: ['vehicleNumber']
+            }
+          ]
+        });
+        break;
       }
-    ]
-  });
-  break;
-case 'vehiclemaster': 
-  const isDeletedMasterFilter = req.query.isDeleted === '1';
-  result = await VehicleMaster.findAll({
-    where: {
-      isDeleted: isDeletedMasterFilter ? 1 : 0,
-      [Op.or]: [
-        { vehicleNumber: { [Op.like]: `%${keyword}%` } },
-        { vehicleModelName: { [Op.like]: `%${keyword}%` } },    // Changed from vehicleModel
-        { vehicleType: { [Op.like]: `%${keyword}%` } },         // Added vehicleType search
-        { vendorName: { [Op.like]: `%${keyword}%` } },           // Changed from owner
-        // Remove ownerId search or replace with actual owner ID if needed
-        // { ownerId: { [Op.like]: %${keyword}% } },
-      ],
-    },
-  });
-  break;
 
+      case 'vehiclemaster': {
+        const isDeletedMasterFilter = req.query.isDeleted === '1';
+        result = await VehicleMaster.findAll({
+          where: {
+            isDeleted: isDeletedMasterFilter ? 1 : 0,
+            [Op.or]: [
+              { vehicleNumber: { [Op.like]: `%${keyword}%` } },
+              { vehicleModelName: { [Op.like]: `%${keyword}%` } },
+              { vehicleType: { [Op.like]: `%${keyword}%` } },
+              { vendorName: { [Op.like]: `%${keyword}%` } },
+            ],
+          },
+        });
+        break;
+      }
 
-case 'booking': {
-  result = await Booking.findAll({
-    where: {
-      [Op.or]: [
-        { bookingId: { [Op.like]: `%${keyword}%` } },
-        { bookingDate: { [Op.like]: `%${keyword}%` } },
-        { bookingTime: { [Op.like]: `%${keyword}%` } },
-        { signature: { [Op.like]: `%${keyword}%` } },
-        { bookingCode: { [Op.like]: `%${keyword}%` } },
-        { pickupPoint: { [Op.like]: `%${keyword}%` } },
-        { dropPoint: { [Op.like]: `%${keyword}%` } },
-        { remarks: { [Op.like]: `%${keyword}%` } },
-        { purpose: { [Op.like]: `%${keyword}%` } },
-        { confirmStatus: { [Op.like]: `%${keyword}%` } },
-        { bookingStatus: { [Op.like]: `%${keyword}%` } },
+      case 'booking': {
+        result = await Booking.findAll({
+          where: {
+            [Op.or]: [
+              { bookingId: { [Op.like]: `%${keyword}%` } },
+              { bookingDate: { [Op.like]: `%${keyword}%` } },
+              { bookingTime: { [Op.like]: `%${keyword}%` } },
+              { signature: { [Op.like]: `%${keyword}%` } },
+              { bookingCode: { [Op.like]: `%${keyword}%` } },
+              { pickupPoint: { [Op.like]: `%${keyword}%` } },
+              { dropPoint: { [Op.like]: `%${keyword}%` } },
+              { remarks: { [Op.like]: `%${keyword}%` } },
+              { purpose: { [Op.like]: `%${keyword}%` } },
+              { confirmStatus: { [Op.like]: `%${keyword}%` } },
+              { bookingStatus: { [Op.like]: `%${keyword}%` } },
 
-        // 🔹 User & Company
-        { '$user.username$': { [Op.like]: `%${keyword}%` } },
-        { '$user.email$': { [Op.like]: `%${keyword}%` } },
-        { '$user.company.companyName$': { [Op.like]: `%${keyword}%` } },
+              // User & Company
+              { '$user.username$': { [Op.like]: `%${keyword}%` } },
+              { '$user.email$': { [Op.like]: `%${keyword}%` } },
+              { '$user.company.companyName$': { [Op.like]: `%${keyword}%` } },
 
-        // 🔹 Invoice Number Search
-        { '$invoice.invoiceNumber$': { [Op.like]: `%${keyword}%` } },
-      ],
-    },
-    include: [
-      {
-        model: User,
-        as: 'user',
-        attributes: ['username', 'email'],
-        include: [
-          { model: Company, as: 'company', attributes: ['companyName'] }
-        ]
-      },
-      {
-        model: Invoice,
-        as: 'invoice',
-        attributes: ['invoiceId', 'invoiceNumber', 'invoiceAmount'],
-      },
-    ],
-  });
-  break;
-}
+              // Vehicle & Vehicle Number
+              { '$vehicleMaster.vehicleNumber$': { [Op.like]: `%${keyword}%` } },
+
+              // Invoice Number Search
+              { '$invoice.invoiceNumber$': { [Op.like]: `%${keyword}%` } },
+            ],
+          },
+          include: [
+            {
+              model: User,
+              as: 'user',
+              attributes: ['username', 'email'],
+              include: [
+                { model: Company, as: 'company', attributes: ['companyName'] }
+              ]
+            },
+            {
+              model: VehicleMaster,
+              as: 'vehicleMaster',
+              attributes: ['vehicleMasterId', 'vehicleNumber'],
+              required: false
+            },
+            {
+              model: Vehicle,
+              as: 'vehicle',
+              attributes: ['vehicleId', 'vehicleName'],
+              required: false
+            },
+            {
+              model: Invoice,
+              as: 'invoice',
+              attributes: ['invoiceId', 'invoiceNumber', 'invoiceAmount'],
+              required: false
+            },
+          ],
+        });
+        break;
+      }
+
 
 
 case 'user': {

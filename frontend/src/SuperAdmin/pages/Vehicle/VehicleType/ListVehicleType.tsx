@@ -24,6 +24,7 @@ import {
 interface VehicleType {
   vehicleTypeId: string;
   vehicleType: string;
+  vehicleNumber?: string;
   priorMinutes: number;
   seatCapacity: number;
   baseFare?: number;
@@ -41,6 +42,7 @@ const ListVehicleType: React.FC = () => {
   // Edit Modal State
   const [editingVehicle, setEditingVehicle] = useState<VehicleType | null>(null);
   const [editName, setEditName] = useState("");
+  const [editVehicleNumber, setEditVehicleNumber] = useState("");
   const [editSeats, setEditSeats] = useState("");
   const [editPriorMinutes, setEditPriorMinutes] = useState("");
   const [editBaseFare, setEditBaseFare] = useState("");
@@ -87,13 +89,15 @@ const ListVehicleType: React.FC = () => {
 
   // Filter list by search query
   const filteredVehicles = vehicleTypes.filter((vt) =>
-    (vt.vehicleType || "").toLowerCase().includes(searchText.toLowerCase().trim())
+    (vt.vehicleType || "").toLowerCase().includes(searchText.toLowerCase().trim()) ||
+    (vt.vehicleNumber || "").toLowerCase().includes(searchText.toLowerCase().trim())
   );
 
   // Open Edit Modal
   const openEditModal = (vt: VehicleType) => {
     setEditingVehicle(vt);
     setEditName(vt.vehicleType || "");
+    setEditVehicleNumber(vt.vehicleNumber === "Not Added" ? "" : (vt.vehicleNumber || ""));
     setEditSeats(String(vt.seatCapacity || 4));
     setEditPriorMinutes(String(vt.priorMinutes || 30));
     setEditBaseFare(String(vt.baseFare || 250));
@@ -137,6 +141,9 @@ const ListVehicleType: React.FC = () => {
 
       const formData = new FormData();
       formData.append("vehicleType", editName.trim());
+      if (editVehicleNumber.trim()) {
+        formData.append("vehicleNumber", editVehicleNumber.trim().toUpperCase());
+      }
       formData.append("seatCapacity", editSeats);
       formData.append("priorMinutes", editPriorMinutes);
       formData.append("baseFare", editBaseFare);
@@ -164,6 +171,7 @@ const ListVehicleType: React.FC = () => {
       setSavingEdit(false);
     }
   };
+
 
   // Execute Deletion
   const handleConfirmDelete = async () => {
@@ -250,6 +258,7 @@ const ListVehicleType: React.FC = () => {
               <thead>
                 <tr className="border-b border-slate-100 bg-slate-50/70 text-slate-500 font-extrabold uppercase tracking-wider">
                   <th className="py-3.5 px-4">Vehicle Category</th>
+                  <th className="py-3.5 px-4">Vehicle Number</th>
                   <th className="py-3.5 px-4">Capacity</th>
                   <th className="py-3.5 px-4">Dynamic Base Fare</th>
                   <th className="py-3.5 px-4">Rate per KM</th>
@@ -260,14 +269,14 @@ const ListVehicleType: React.FC = () => {
               <tbody className="divide-y divide-slate-100 font-semibold text-slate-700">
                 {loading ? (
                   <tr>
-                    <td colSpan={6} className="py-12 text-center text-slate-500 font-bold">
+                    <td colSpan={7} className="py-12 text-center text-slate-500 font-bold">
                       <RefreshCw size={24} className="animate-spin text-amber-500 mx-auto mb-2" />
                       Loading vehicle fleet from database...
                     </td>
                   </tr>
                 ) : filteredVehicles.length === 0 ? (
                   <tr>
-                    <td colSpan={6} className="py-12 text-center text-slate-500">
+                    <td colSpan={7} className="py-12 text-center text-slate-500">
                       <Car size={32} className="text-slate-300 mx-auto mb-2" />
                       <p className="font-bold text-slate-700">No vehicle types found</p>
                       <p className="text-xs text-slate-400 mt-0.5">Try searching for a different name or add a new category.</p>
@@ -306,6 +315,17 @@ const ListVehicleType: React.FC = () => {
                               </span>
                             </div>
                           </div>
+                        </td>
+
+                        {/* Vehicle Number */}
+                        <td className="py-3.5 px-4">
+                          <span className={`px-2.5 py-1 rounded-lg text-xs font-mono font-bold uppercase inline-block ${
+                            vt.vehicleNumber && vt.vehicleNumber !== 'Not Added'
+                              ? 'bg-slate-900 text-white'
+                              : 'bg-amber-100 text-amber-800'
+                          }`}>
+                            {vt.vehicleNumber || 'Not Added'}
+                          </span>
                         </td>
 
                         {/* Capacity */}
@@ -372,11 +392,11 @@ const ListVehicleType: React.FC = () => {
           </div>
         </div>
 
-        {/* Quick Edit Modal */}
+        {/* Edit Modal */}
         {editingVehicle && (
-          <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-slate-950/60 backdrop-blur-sm animate-in fade-in duration-150">
-            <div className="bg-white rounded-3xl shadow-2xl border border-slate-100 max-w-lg w-full p-6 space-y-5 animate-in zoom-in-95 duration-200">
-              {/* Header */}
+          <div className="fixed inset-0 bg-slate-950/60 backdrop-blur-sm z-50 flex items-center justify-center p-4">
+            <div className="bg-white rounded-3xl border border-slate-200 shadow-2xl w-full max-w-lg overflow-hidden animate-in fade-in zoom-in-95 duration-150 p-6 space-y-5">
+              {/* Modal Header */}
               <div className="flex items-center justify-between border-b border-slate-100 pb-3">
                 <div className="flex items-center gap-2">
                   <div className="w-9 h-9 rounded-xl bg-amber-100 text-amber-900 flex items-center justify-center font-bold">
@@ -384,7 +404,7 @@ const ListVehicleType: React.FC = () => {
                   </div>
                   <div>
                     <h3 className="text-base font-black text-slate-900">Edit Vehicle Category</h3>
-                    <p className="text-[11px] text-slate-400">Updates live pricing and passenger capacity.</p>
+                    <p className="text-[11px] text-slate-400">Updates live pricing, registration number, and capacity.</p>
                   </div>
                 </div>
                 <button
@@ -398,15 +418,28 @@ const ListVehicleType: React.FC = () => {
 
               {/* Form */}
               <form onSubmit={handleSaveEdit} className="space-y-4 text-xs">
-                <div>
-                  <label className="block font-bold text-slate-700 mb-1">Vehicle Category Name *</label>
-                  <input
-                    type="text"
-                    value={editName}
-                    onChange={(e) => setEditName(e.target.value)}
-                    required
-                    className="w-full px-3.5 py-2.5 rounded-xl bg-slate-50 border border-slate-200 focus:border-amber-500 focus:bg-white text-xs font-bold text-slate-900 focus:outline-none"
-                  />
+                <div className="grid grid-cols-2 gap-3">
+                  <div>
+                    <label className="block font-bold text-slate-700 mb-1">Vehicle Category Name *</label>
+                    <input
+                      type="text"
+                      value={editName}
+                      onChange={(e) => setEditName(e.target.value)}
+                      required
+                      className="w-full px-3.5 py-2.5 rounded-xl bg-slate-50 border border-slate-200 focus:border-amber-500 focus:bg-white text-xs font-bold text-slate-900 focus:outline-none"
+                    />
+                  </div>
+
+                  <div>
+                    <label className="block font-bold text-slate-700 mb-1">Vehicle Number</label>
+                    <input
+                      type="text"
+                      placeholder="e.g. TN 76 AB 1234"
+                      value={editVehicleNumber}
+                      onChange={(e) => setEditVehicleNumber(e.target.value.toUpperCase())}
+                      className="w-full px-3.5 py-2.5 rounded-xl bg-slate-50 border border-slate-200 focus:border-amber-500 focus:bg-white text-xs font-mono font-black uppercase text-slate-900 focus:outline-none"
+                    />
+                  </div>
                 </div>
 
                 <div className="grid grid-cols-2 gap-3">

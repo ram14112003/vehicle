@@ -5161,7 +5161,13 @@ export const assignDriverToBooking = async (req: Request, res: Response) => {
       include: [
         { model: User, as: "user", required: false },
         { model: VehicleType, as: "vehicleType", required: false },
-        { model: Vehicle, as: "vehicle", required: false },
+        {
+          model: Vehicle,
+          as: "vehicle",
+          include: [{ model: VehicleMaster, as: "vehicleMaster", required: false }],
+          required: false
+        },
+        { model: VehicleMaster, as: "vehicleMaster", required: false },
         { model: Drivers, as: "driver", required: false }
       ]
     });
@@ -5170,7 +5176,8 @@ export const assignDriverToBooking = async (req: Request, res: Response) => {
     const customerPhone = updated?.user?.mobile || (booking as any).riderPhone || booking.behalfOfPhone || "";
     const customerEmail = updated?.user?.email || (booking as any).email || "";
     const vehicleName = updated?.vehicle?.vehicleName || updated?.vehicleType?.vehicleType || booking.preferredType || "";
-    const vehicleNumber = (updated?.vehicle as any)?.vehicleNo || (updated as any)?.vehicle?.vehicleMaster?.vehicleNumber || (booking as any).vehicleNumber || "";
+    const vehicleNumber = updated?.vehicleMaster?.vehicleNumber || updated?.vehicle?.vehicleMaster?.vehicleNumber || (updated?.vehicle as any)?.vehicleNo || (booking as any).vehicleNumber || "Not Added";
+
 
 
 

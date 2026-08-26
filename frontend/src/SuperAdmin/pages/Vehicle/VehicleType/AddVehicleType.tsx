@@ -12,14 +12,17 @@ import {
   AlertCircle,
   Save,
   RefreshCw,
-  Image as ImageIcon
+  Image as ImageIcon,
+  Hash
 } from 'lucide-react';
+
 
 
 const AddVehicleType: React.FC = () => {
   const navigate = useNavigate();
 
   const [vehicleType, setVehicleType] = useState('');
+  const [vehicleNumber, setVehicleNumber] = useState('');
   const [seatCapacity, setSeatCapacity] = useState('4');
   const [priorMinutes, setPriorMinutes] = useState('30');
   const [baseFare, setBaseFare] = useState('250');
@@ -29,6 +32,7 @@ const AddVehicleType: React.FC = () => {
 
   const [errors, setErrors] = useState<{
     vehicleType?: string;
+    vehicleNumber?: string;
     seatCapacity?: string;
     priorMinutes?: string;
     baseFare?: string;
@@ -54,6 +58,9 @@ const AddVehicleType: React.FC = () => {
 
     if (!vehicleType.trim()) {
       errs.vehicleType = 'Vehicle category / name is required';
+    }
+    if (!vehicleNumber.trim()) {
+      errs.vehicleNumber = 'Vehicle registration number is required (e.g. TN 76 AB 1234)';
     }
     const seats = parseInt(seatCapacity);
     if (isNaN(seats) || seats < 1 || seats > 50) {
@@ -89,6 +96,7 @@ const AddVehicleType: React.FC = () => {
 
       const formData = new FormData();
       formData.append('vehicleType', vehicleType.trim());
+      formData.append('vehicleNumber', vehicleNumber.trim().toUpperCase());
       formData.append('seatCapacity', seatCapacity);
       formData.append('priorMinutes', priorMinutes);
       formData.append('baseFare', baseFare);
@@ -97,6 +105,7 @@ const AddVehicleType: React.FC = () => {
       if (selectedImage) {
         formData.append('vehicleImg', selectedImage);
       }
+
 
       const res = await axiosInstance.post('/vendor/createVehicleType', formData, {
         headers: { 'Content-Type': 'multipart/form-data' }
@@ -150,7 +159,7 @@ const AddVehicleType: React.FC = () => {
               <h2 className="text-base font-black text-slate-900">Vehicle Information</h2>
             </div>
 
-            <div className="grid grid-cols-1 md:grid-cols-2 gap-5">
+            <div className="grid grid-cols-1 md:grid-cols-3 gap-5">
               <div>
                 <label className="block text-xs font-extrabold uppercase tracking-wider text-slate-600 mb-1.5">
                   Vehicle Name / Category <span className="text-rose-500">*</span>
@@ -167,6 +176,29 @@ const AddVehicleType: React.FC = () => {
                 {errors.vehicleType && (
                   <p className="text-[11px] font-bold text-rose-500 mt-1 flex items-center gap-1">
                     <AlertCircle size={12} /> {errors.vehicleType}
+                  </p>
+                )}
+              </div>
+
+              <div>
+                <label className="block text-xs font-extrabold uppercase tracking-wider text-slate-600 mb-1.5">
+                  Vehicle Number <span className="text-rose-500">*</span>
+                </label>
+                <div className="relative">
+                  <Hash className="absolute left-3.5 top-1/2 -translate-y-1/2 text-slate-400" size={16} />
+                  <input
+                    type="text"
+                    value={vehicleNumber}
+                    onChange={(e) => setVehicleNumber(e.target.value.toUpperCase())}
+                    placeholder="e.g. TN 76 AB 1234"
+                    className={`w-full pl-10 pr-4 py-2.5 rounded-2xl bg-slate-50 border text-xs font-mono font-black uppercase text-slate-900 focus:bg-white focus:outline-none transition-colors ${
+                      errors.vehicleNumber ? 'border-rose-400 focus:border-rose-500' : 'border-slate-200 focus:border-amber-500'
+                    }`}
+                  />
+                </div>
+                {errors.vehicleNumber && (
+                  <p className="text-[11px] font-bold text-rose-500 mt-1 flex items-center gap-1">
+                    <AlertCircle size={12} /> {errors.vehicleNumber}
                   </p>
                 )}
               </div>
@@ -197,6 +229,7 @@ const AddVehicleType: React.FC = () => {
               </div>
             </div>
           </div>
+
 
           {/* Section 2: Dynamic Pricing Rules */}
           <div className="bg-white p-6 rounded-3xl border border-slate-200/80 shadow-sm space-y-5">

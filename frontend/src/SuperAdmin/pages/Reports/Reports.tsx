@@ -96,12 +96,14 @@ interface DriverRow {
 
 interface VehicleRow {
   vehicleName: string;
+  vehicleNumber: string;
   totalTrips: number;
   totalDistance: number;
   totalRevenue: number;
   totalPaid: number;
   totalPending: number;
 }
+
 
 const Reports: React.FC = () => {
   const BASE_URL = config.baseurl.apibaseurl || 'http://localhost:5000';
@@ -376,8 +378,9 @@ const Reports: React.FC = () => {
     doc.setFont('helvetica', 'normal');
     doc.text(`Booking ID: ${inv.bookingCode}`, 14, 60);
     doc.text(`Booking Date: ${inv.bookingDate} at ${inv.bookingTime}`, 14, 66);
-    doc.text(`Vehicle: ${inv.vehicleName} (${inv.vehicleNumber})`, 14, 72);
-    doc.text(`Assigned Driver: ${inv.driverName} (Ph: ${inv.driverPhone})`, 14, 78);
+    doc.text(`Vehicle: ${inv.vehicleName || inv.vehicle?.name}`, 14, 72);
+    doc.text(`Vehicle No: ${inv.vehicleNumber || inv.vehicle?.vehicleNumber || 'Not Added'}`, 14, 78);
+    doc.text(`Assigned Driver: ${inv.driverName} (Ph: ${inv.driverPhone})`, 14, 84);
 
     doc.setFont('helvetica', 'bold');
     doc.text('Customer Details', 115, 52);
@@ -390,13 +393,14 @@ const Reports: React.FC = () => {
 
     // Route Table
     autoTable(doc, {
-      startY: 86,
+      startY: 92,
       head: [['Trip Route', 'Pickup Location', 'Drop Location', 'Distance (km)']],
       body: [['One Way', inv.pickup, inv.drop, `${inv.distanceKm} km`]],
       theme: 'grid',
       headStyles: { fillColor: [15, 23, 42], textColor: [255, 255, 255], fontStyle: 'bold' },
       styles: { fontSize: 9 }
     });
+
 
     // Fare Breakdown Table
     const finalY = (doc as any).lastAutoTable.finalY || 110;
@@ -806,8 +810,9 @@ const Reports: React.FC = () => {
                       </td>
                       <td className="py-3 px-4">
                         <div className="font-semibold text-slate-800">{b.driverName}</div>
-                        <div className="text-[11px] text-slate-400">{b.vehicleName} {b.vehicleNumber !== 'N/A' && `(${b.vehicleNumber})`}</div>
+                        <div className="text-[11px] text-slate-500 font-semibold">{b.vehicleName} {b.vehicleNumber && b.vehicleNumber !== 'N/A' && b.vehicleNumber !== 'Not Added' ? `(${b.vehicleNumber})` : '(No: Not Added)'}</div>
                       </td>
+
                       <td className="py-3 px-4 text-right font-bold text-slate-900">₹{b.finalFare.toLocaleString()}</td>
                       <td className="py-3 px-4 text-right font-bold text-emerald-600">₹{b.paidAmount.toLocaleString()}</td>
                       <td className="py-3 px-4 text-right font-bold text-rose-600">₹{b.balance.toLocaleString()}</td>
@@ -1010,6 +1015,7 @@ const Reports: React.FC = () => {
               <thead className="bg-slate-900 text-slate-200 uppercase font-black tracking-wider text-[10px]">
                 <tr>
                   <th className="py-3.5 px-4">Vehicle Model / Type</th>
+                  <th className="py-3.5 px-4">Vehicle Number</th>
                   <th className="py-3.5 px-4 text-center">Total Trips</th>
                   <th className="py-3.5 px-4 text-center">Total Distance (km)</th>
                   <th className="py-3.5 px-4 text-right">Total Revenue (₹)</th>
@@ -1020,20 +1026,21 @@ const Reports: React.FC = () => {
               <tbody className="divide-y divide-slate-100 text-slate-700 font-medium">
                 {loading ? (
                   <tr>
-                    <td colSpan={6} className="py-12 text-center text-slate-400">
+                    <td colSpan={7} className="py-12 text-center text-slate-400">
                       <RefreshCw className="w-6 h-6 animate-spin mx-auto text-amber-500" />
                     </td>
                   </tr>
                 ) : vehicles.length === 0 ? (
                   <tr>
-                    <td colSpan={6} className="py-12 text-center text-slate-400 font-bold">
+                    <td colSpan={7} className="py-12 text-center text-slate-400 font-bold">
                       No vehicle reports found.
                     </td>
                   </tr>
                 ) : (
                   vehicles.map(v => (
-                    <tr key={v.vehicleName} className="hover:bg-slate-50/80 transition">
+                    <tr key={`${v.vehicleName}__${v.vehicleNumber}`} className="hover:bg-slate-50/80 transition">
                       <td className="py-3 px-4 font-bold text-slate-900">{v.vehicleName}</td>
+                      <td className="py-3 px-4 font-semibold text-slate-700">{v.vehicleNumber || 'Not Added'}</td>
                       <td className="py-3 px-4 text-center font-bold">{v.totalTrips}</td>
                       <td className="py-3 px-4 text-center font-bold text-indigo-600">{v.totalDistance} km</td>
                       <td className="py-3 px-4 text-right font-black text-slate-900">₹{v.totalRevenue.toLocaleString()}</td>
@@ -1044,6 +1051,7 @@ const Reports: React.FC = () => {
                 )}
               </tbody>
             </table>
+
           </div>
         </div>
       )}
@@ -1088,10 +1096,18 @@ const Reports: React.FC = () => {
                   </div>
                   <div>
                     <span className="text-slate-400 font-bold block uppercase text-[10px]">Driver & Cab:</span>
-                    <span className="font-bold text-slate-900">{selectedInvoice.driverName} ({selectedInvoice.driverPhone})</span>
-                    <span className="text-slate-500 block">{selectedInvoice.vehicleName} - {selectedInvoice.vehicleNumber}</span>
+                    <span className="font-bold text-slate-900 block">
+                      {selectedInvoice.driverName} {selectedInvoice.driverPhone && selectedInvoice.driverPhone !== 'N/A' ? `(${selectedInvoice.driverPhone})` : ''}
+                    </span>
+                    <div className="mt-1">
+                      <span className="text-slate-700 font-medium block">{selectedInvoice.vehicleName || selectedInvoice.vehicle?.name}</span>
+                      <span className="text-slate-500 block text-[11px] font-mono">
+                        Vehicle No: {selectedInvoice.vehicleNumber || selectedInvoice.vehicle?.vehicleNumber || 'Not Added'}
+                      </span>
+                    </div>
                   </div>
                 </div>
+
 
                 {/* Route */}
                 <div className="p-4 rounded-2xl bg-slate-50 border border-slate-100 text-xs space-y-2">

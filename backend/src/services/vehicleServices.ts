@@ -1,8 +1,9 @@
 import { Response } from 'express';
 import { Vehicle } from '../models/vehicle';
 import { VehicleType } from '../models/vehicleType';
-// import { Vendor } from '../models/vendor';
+import { Vendor } from '../models/vendor';
 import { USERS } from "../utils/costants";
+
 const { ROLES } = USERS;
 import { VEHICLESTATUS } from '../utils/costants';
 import { Booking, Drivers, VehicleMaster } from '../models';
@@ -247,9 +248,9 @@ export const getVehicleById = async (req: any, res: Response) => {
 export const updateVehicle = async (req: any, res: Response) => {
     const { vehicleId } = req.params;
     const updateData = req.body;
+    const { vehicleNumber } = updateData;
 
-     const newImages = req.files ? (req.files as Express.Multer.File[]).map(f => f.filename) : [];
-
+    const newImages = req.files ? (req.files as Express.Multer.File[]).map(f => f.filename) : [];
 
     try {
         const role = req.role;
@@ -262,32 +263,103 @@ export const updateVehicle = async (req: any, res: Response) => {
             return res.status(404).json({ message: 'Vehicle not found' });
         }
 
-           if (newImages.length > 0) {
-      updateData.vehicleImg = newImages;
-    }
+        if (newImages.length > 0) {
+            updateData.vehicleImg = newImages;
+        }
 
         if (updateData.vehicleName && updateData.vehicleName !== vehicle.vehicleName) {
             const existing = await Vehicle.findOne({
-                where: { vehicleName: updateData.vehicleName }
+                where: {
+                    vehicleName: updateData.vehicleName,
+                    vehicleId: { [Op.ne]: vehicleId }
+                }
             });
             if (existing) {
                 return res.status(400).json({ message: 'Vehicle name already exists' });
             }
         }
 
+        // Validate and update vehicleNumber if provided
+        if (vehicleNumber && typeof vehicleNumber === 'string') {
+            const trimmedNumber = vehicleNumber.trim().toUpperCase();
+            const normalizedNumber = trimmedNumber.replace(/\s+/g, '');
+
+            const allExisting = await VehicleMaster.findAll({
+                where: {
+                    isDeleted: 0,
+                    vehicleId: { [Op.ne]: vehicleId }
+                }
+            });
+
+            const duplicate = allExisting.find(
+                v => (v.vehicleNumber || '').toUpperCase().replace(/\s+/g, '') === normalizedNumber
+            );
+
+            if (duplicate) {
+                return res.status(400).json({
+                    message: `Vehicle number "${trimmedNumber}" is already assigned to another vehicle`,
+                });
+            }
+
+            // Find or create VehicleMaster for this vehicleId
+            let vm = await VehicleMaster.findOne({ where: { vehicleId, isDeleted: 0 } });
+            const vType = updateData.vehicleTypeId
+                ? await VehicleType.findByPk(updateData.vehicleTypeId)
+                : (vehicle.vehicleTypeId ? await VehicleType.findByPk(vehicle.vehicleTypeId) : null);
+
+            if (vm) {
+                await vm.update({
+                    vehicleNumber: trimmedNumber,
+                    vehicleModelName: updateData.vehicleName || vehicle.vehicleName,
+                    vehicleTypeId: updateData.vehicleTypeId || vehicle.vehicleTypeId,
+                    vehicleType: vType?.vehicleType || vm.vehicleType,
+                    isDeleted: 0
+                });
+            } else {
+                let targetVendor = null;
+                if (updateData.vendorId) {
+                    targetVendor = await Vendor.findByPk(updateData.vendorId);
+                }
+                if (!targetVendor) {
+                    targetVendor = await Vendor.findOne({ where: { isDeleted: false } });
+                }
+                if (!targetVendor) {
+                    return res.status(400).json({ message: "No active vendor found in database. Please add a vendor first." });
+                }
+
+                await VehicleMaster.create({
+                    vehicleNumber: trimmedNumber,
+                    vehicleId: vehicle.vehicleId,
+                    vendorId: targetVendor.vendorId,
+                    vendorName: targetVendor.vendorName,
+                    vehicleModelName: updateData.vehicleName || vehicle.vehicleName,
+                    vehicleTypeId: updateData.vehicleTypeId || vehicle.vehicleTypeId,
+                    vehicleType: vType?.vehicleType || '',
+                    isDeleted: 0
+                });
+            }
+        }
+
+
         await vehicle.update(updateData);
 
-        const updatedVehicle = await Vehicle.findByPk(vehicleId);
+        const updatedVehicle = await Vehicle.findByPk(vehicleId, {
+            include: [
+                { model: VehicleType, as: 'vehicleType', required: false },
+                { model: VehicleMaster, as: 'vehicleMaster', required: false }
+            ]
+        });
 
         res.status(200).json({
             message: 'Vehicle updated successfully',
             vehicle: updatedVehicle
         });
-    } catch (err) {
+    } catch (err: any) {
         console.error('Error updating vehicle:', err);
-        res.status(500).json({ error: 'Internal server error' });
+        res.status(500).json({ error: err.message || 'Internal server error' });
     }
 };
+
 
 
 // UPDATE Vehicle Status (Separate function for status updates only)

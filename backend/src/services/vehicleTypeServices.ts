@@ -3,8 +3,11 @@ import { VehicleType } from '../models/vehicleType'; // Adjust path as needed
 import { Vehicle } from '../models/vehicle'; 
 import { Drivers } from '../models/drivers';
 import { Booking } from '../models/booking'; 
+import { VehicleMaster } from '../models/vehicleMaster';
+import { Vendor } from '../models/vendor';
 import { USERS } from "../utils/costants";
 import { Op, Transaction } from "sequelize";
+
 import { PackageData } from "../models/packageData"; // ✅ make sure path is correct
 const { ROLES } = USERS;
 
@@ -80,7 +83,7 @@ const syncVehicleTypeRenameToPackageData = async (
 export const updateVehicleType = async (req: any, res: Response) => {
   const { id } = req.params;
   const updateData = req.body;
-  const { vehicleType, seatCapacity, priorMinutes, baseFare, perKmRate } = req.body;
+  const { vehicleType, seatCapacity, priorMinutes, baseFare, perKmRate, vehicleNumber } = req.body;
   const newImages = req.files ? (req.files as Express.Multer.File[]).map(f => f.filename) : [];
 
   try {
@@ -113,6 +116,95 @@ export const updateVehicleType = async (req: any, res: Response) => {
         return res.status(400).json({ message: 'Vehicle name already exists' });
       }
     }
+
+    // Validate and update vehicleNumber if provided
+    if (vehicleNumber && typeof vehicleNumber === 'string') {
+      const trimmedNumber = vehicleNumber.trim().toUpperCase();
+      const normalizedNumber = trimmedNumber.replace(/\s+/g, '');
+
+      const allExisting = await VehicleMaster.findAll({
+        where: {
+          isDeleted: 0,
+          vehicleTypeId: { [Op.ne]: id }
+        }
+      });
+
+      const duplicate = allExisting.find(
+        v => (v.vehicleNumber || '').toUpperCase().replace(/\s+/g, '') === normalizedNumber
+      );
+
+      if (duplicate) {
+        return res.status(400).json({
+          message: `Vehicle number "${trimmedNumber}" is already assigned to another vehicle`,
+        });
+      }
+
+      // Find or create VehicleMaster for this vehicleTypeId
+      let vm = await VehicleMaster.findOne({ where: { vehicleTypeId: id, isDeleted: 0 } });
+      if (vm) {
+        await vm.update({
+          vehicleNumber: trimmedNumber,
+          vehicleModelName: vehicleType || existingVehicleType.vehicleType,
+          vehicleType: vehicleType || existingVehicleType.vehicleType,
+          isDeleted: 0
+        });
+      } else {
+        // Resolve vehicleId
+        let targetVehicle = null;
+        if (req.body.vehicleId) {
+          targetVehicle = await Vehicle.findByPk(req.body.vehicleId);
+        }
+        if (!targetVehicle) {
+          targetVehicle = await Vehicle.findOne({ where: { vehicleTypeId: id, isDeleted: false } });
+        }
+        if (!targetVehicle) {
+          targetVehicle = await Vehicle.create({
+            vehicleName: vehicleType || existingVehicleType.vehicleType,
+            vehicleTypeId: id,
+            manufacturing: 'Standard',
+            availableStatus: 'AVAILABLE',
+            isDeleted: false
+          });
+        }
+
+        // Resolve vendorId
+        let targetVendor = null;
+        if (req.body.vendorId) {
+          targetVendor = await Vendor.findByPk(req.body.vendorId);
+        }
+        if (!targetVendor) {
+          targetVendor = await Vendor.findOne({ where: { isDeleted: false } });
+        }
+
+        if (!targetVehicle?.vehicleId) {
+          return res.status(400).json({ message: "vehicleId is required to register vehicle number" });
+        }
+        if (!targetVendor?.vendorId) {
+          return res.status(400).json({ message: "vendorId is required to register vehicle number" });
+        }
+
+        const validVehicle = await Vehicle.findByPk(targetVehicle.vehicleId);
+        const validVendor = await Vendor.findByPk(targetVendor.vendorId);
+        if (!validVehicle) {
+          return res.status(400).json({ message: "Invalid vehicleId: Vehicle does not exist" });
+        }
+        if (!validVendor) {
+          return res.status(400).json({ message: "Invalid vendorId: Vendor does not exist" });
+        }
+
+        await VehicleMaster.create({
+          vehicleNumber: trimmedNumber,
+          vehicleId: validVehicle.vehicleId,
+          vendorId: validVendor.vendorId,
+          vendorName: validVendor.vendorName || 'Default Vendor',
+          vehicleModelName: validVehicle.vehicleName || existingVehicleType.vehicleType,
+          vehicleTypeId: id,
+          vehicleType: existingVehicleType.vehicleType,
+          isDeleted: 0
+        });
+      }
+    }
+
 
     const oldName = String(existingVehicleType.vehicleType || "");
     const newName = vehicleType !== undefined ? String(vehicleType) : oldName;
@@ -152,9 +244,9 @@ export const updateVehicleType = async (req: any, res: Response) => {
       data: existingVehicleType,
       packagesUpdatedCount: result.packagesUpdatedCount,
     });
-  } catch (err) {
+  } catch (err: any) {
     console.error("Error updating vehicle type:", err);
-    return res.status(500).json({ error: "Internal server error" });
+    return res.status(500).json({ error: err.message || "Internal server error" });
   }
 };
 
@@ -173,24 +265,48 @@ export const getAllVehicleTypesforWeb = async (req: Request, res: Response) => {
       where: whereClause,
       include: [
         {
+          model: VehicleMaster,
+          as: 'vehicleMaster',
+          attributes: ['vehicleMasterId', 'vehicleNumber'],
+          required: false
+        },
+        {
           model: Vehicle,
-          as: 'vehicle',     required: false, 
+          as: 'vehicle',
+          required: false, 
           include: [
             {
+              model: VehicleMaster,
+              as: 'vehicleMaster',
+              attributes: ['vehicleMasterId', 'vehicleNumber'],
+              required: false
+            },
+            {
               model: Drivers,
-              as: 'driver' ,  required: false, 
+              as: 'driver',
+              required: false, 
             }
           ]
         }
       ]
     });
 
-    res.status(200).json({ data: vehicleTypes });
+    const formatted = vehicleTypes.map((vt: any) => {
+      const vMasterNum = vt.vehicleMaster?.[0]?.vehicleNumber || vt.vehicle?.[0]?.vehicleMaster?.vehicleNumber || 'Not Added';
+      const json = vt.toJSON();
+      return {
+        ...json,
+        vehicleNumber: vMasterNum
+      };
+    });
+
+    res.status(200).json({ data: formatted });
   } catch (error) {
     console.error('Error fetching vehicle types:', error);
     res.status(500).json({ message: 'Failed to fetch vehicle types' });
   }
 };
+
 
 export const getAllVehicleTypes = async (req: Request, res: Response) => {
   try {

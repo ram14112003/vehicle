@@ -93,6 +93,67 @@ function buildDateWhereClause(query: any) {
 }
 
 /**
+ * Preload VehicleMaster lookup maps to dynamically resolve registration numbers
+ */
+async function getVehicleMasterLookupMaps() {
+  const masters = await VehicleMaster.findAll({ where: { isDeleted: 0 } });
+  const byMasterId = new Map<string, string>();
+  const byVehicleId = new Map<string, string>();
+  const byTypeId = new Map<string, string>();
+  const byName = new Map<string, string>();
+
+  for (const m of masters) {
+    const num = (m.vehicleNumber || '').trim();
+    if (!num) continue;
+    if (m.vehicleMasterId) byMasterId.set(m.vehicleMasterId, num);
+    if (m.vehicleId) byVehicleId.set(m.vehicleId, num);
+    if (m.vehicleTypeId) byTypeId.set(m.vehicleTypeId, num);
+    if (m.vehicleModelName) byName.set(m.vehicleModelName.trim().toLowerCase(), num);
+    if (m.vehicleType) byName.set(m.vehicleType.trim().toLowerCase(), num);
+  }
+
+  return { byMasterId, byVehicleId, byTypeId, byName };
+}
+
+/**
+ * Resolve dynamic vehicle registration number with full database fallbacks
+ */
+function resolveVehicleNumberFromLookup(
+  b: any,
+  lookup: {
+    byMasterId: Map<string, string>;
+    byVehicleId: Map<string, string>;
+    byTypeId: Map<string, string>;
+    byName: Map<string, string>;
+  }
+): string {
+  if (b.vehicleMaster?.vehicleNumber && b.vehicleMaster.vehicleNumber.trim() && b.vehicleMaster.vehicleNumber !== 'N/A') {
+    return b.vehicleMaster.vehicleNumber.trim();
+  }
+  if (b.vehicle?.vehicleMaster?.vehicleNumber && b.vehicle.vehicleMaster.vehicleNumber.trim() && b.vehicle.vehicleMaster.vehicleNumber !== 'N/A') {
+    return b.vehicle.vehicleMaster.vehicleNumber.trim();
+  }
+  if (b.vehicleMasterId && lookup.byMasterId.has(b.vehicleMasterId)) {
+    return lookup.byMasterId.get(b.vehicleMasterId)!;
+  }
+  if (b.vehicleId && lookup.byVehicleId.has(b.vehicleId)) {
+    return lookup.byVehicleId.get(b.vehicleId)!;
+  }
+  const typeId = b.vehicleTypeId || b.vehicle?.vehicleTypeId;
+  if (typeId && lookup.byTypeId.has(typeId)) {
+    return lookup.byTypeId.get(typeId)!;
+  }
+  const nameKey = (b.vehicle?.vehicleName || b.preferredType || '').trim().toLowerCase();
+  if (nameKey && lookup.byName.has(nameKey)) {
+    return lookup.byName.get(nameKey)!;
+  }
+  if ((b as any).vehicleNumber && typeof (b as any).vehicleNumber === 'string' && (b as any).vehicleNumber.trim() && (b as any).vehicleNumber !== 'N/A') {
+    return (b as any).vehicleNumber.trim();
+  }
+  return 'Not Added';
+}
+
+/**
  * 1. Overall Financial & Operational Summary
  */
 export async function getReportSummary(req: Request, res: Response) {
@@ -187,6 +248,8 @@ export async function getBookingsReport(req: Request, res: Response) {
     const limit = Math.max(1, Math.min(100, parseInt(req.query.limit as string) || 10));
     const offset = (page - 1) * limit;
 
+    const lookup = await getVehicleMasterLookupMaps();
+
     const { count, rows: bookings } = await Booking.findAndCountAll({
       where,
       include: [
@@ -205,8 +268,16 @@ export async function getBookingsReport(req: Request, res: Response) {
         {
           model: Vehicle,
           as: 'vehicle',
-          attributes: ['vehicleId', 'vehicleName'],
-          required: false
+          attributes: ['vehicleId', 'vehicleName', 'vehicleTypeId'],
+          required: false,
+          include: [
+            {
+              model: VehicleMaster,
+              as: 'vehicleMaster',
+              attributes: ['vehicleMasterId', 'vehicleNumber'],
+              required: false
+            }
+          ]
         },
         {
           model: VehicleMaster,
@@ -237,7 +308,7 @@ export async function getBookingsReport(req: Request, res: Response) {
       const driverName = b.driver?.driverName || 'Unassigned';
       const driverPhone = b.driver?.phno || 'N/A';
       const vehicleName = b.vehicle?.vehicleName || b.preferredType || 'N/A';
-      const vehicleNumber = b.vehicleMaster?.vehicleNumber || (b as any).vehicleNumber || 'N/A';
+      const vehicleNumber = resolveVehicleNumberFromLookup(b, lookup);
 
       return {
         bookingId: b.bookingId,
@@ -252,6 +323,10 @@ export async function getBookingsReport(req: Request, res: Response) {
         customerEmail: b.user?.email || 'N/A',
         driverName,
         driverPhone,
+        vehicle: {
+          name: vehicleName,
+          vehicleNumber
+        },
         vehicleName,
         vehicleNumber,
         distanceKm: Number(b.distanceKm) || 0,
@@ -267,6 +342,7 @@ export async function getBookingsReport(req: Request, res: Response) {
         transactionId: b.paymentTransactionId || b.payment?.transactionId || 'N/A'
       };
     });
+
 
     return res.status(200).json({
       success: true,
@@ -394,6 +470,8 @@ export async function getCustomerBookingHistory(req: Request, res: Response) {
       ];
     }
 
+    const lookup = await getVehicleMasterLookupMaps();
+
     const bookings = await Booking.findAll({
       where,
       include: [
@@ -412,8 +490,16 @@ export async function getCustomerBookingHistory(req: Request, res: Response) {
         {
           model: Vehicle,
           as: 'vehicle',
-          attributes: ['vehicleId', 'vehicleName'],
-          required: false
+          attributes: ['vehicleId', 'vehicleName', 'vehicleTypeId'],
+          required: false,
+          include: [
+            {
+              model: VehicleMaster,
+              as: 'vehicleMaster',
+              attributes: ['vehicleMasterId', 'vehicleNumber'],
+              required: false
+            }
+          ]
         },
         {
           model: VehicleMaster,
@@ -436,6 +522,8 @@ export async function getCustomerBookingHistory(req: Request, res: Response) {
       const isPaid = b.paymentStatus === 'PAID' || b.payment?.status === 'PAID' || b.payment?.status === 'SUCCESS';
       const paidAmount = isPaid ? finalFare : (Number(b.payment?.amount) || 0);
       const balance = Math.max(0, finalFare - paidAmount);
+      const vehicleName = b.vehicle?.vehicleName || b.preferredType || 'N/A';
+      const vehicleNumber = resolveVehicleNumberFromLookup(b, lookup);
 
       return {
         bookingId: b.bookingId,
@@ -447,8 +535,12 @@ export async function getCustomerBookingHistory(req: Request, res: Response) {
         drop: b.dropPoint || (b as any).dropLocation || 'N/A',
         driverName: b.driver?.driverName || 'Unassigned',
         driverPhone: b.driver?.phno || 'N/A',
-        vehicleName: b.vehicle?.vehicleName || b.preferredType || 'N/A',
-        vehicleNumber: b.vehicleMaster?.vehicleNumber || (b as any).vehicleNumber || 'N/A',
+        vehicle: {
+          name: vehicleName,
+          vehicleNumber
+        },
+        vehicleName,
+        vehicleNumber,
         distanceKm: Number(b.distanceKm) || 0,
         finalFare,
         paidAmount,
@@ -566,6 +658,7 @@ export async function getDriverReports(req: Request, res: Response) {
 export async function getVehicleReports(req: Request, res: Response) {
   try {
     const where = buildDateWhereClause(req.query);
+    const lookup = await getVehicleMasterLookupMaps();
 
     const bookings = await Booking.findAll({
       where,
@@ -573,7 +666,21 @@ export async function getVehicleReports(req: Request, res: Response) {
         {
           model: Vehicle,
           as: 'vehicle',
-          attributes: ['vehicleId', 'vehicleName'],
+          attributes: ['vehicleId', 'vehicleName', 'vehicleTypeId'],
+          required: false,
+          include: [
+            {
+              model: VehicleMaster,
+              as: 'vehicleMaster',
+              attributes: ['vehicleMasterId', 'vehicleNumber'],
+              required: false
+            }
+          ]
+        },
+        {
+          model: VehicleMaster,
+          as: 'vehicleMaster',
+          attributes: ['vehicleMasterId', 'vehicleNumber'],
           required: false
         },
         {
@@ -589,11 +696,14 @@ export async function getVehicleReports(req: Request, res: Response) {
     const vehicleMap = new Map<string, any>();
 
     for (const b of bookings) {
-      const vehicleKey = b.vehicle?.vehicleName || b.preferredType || 'Standard Vehicle';
+      const vehicleName = b.vehicle?.vehicleName || b.preferredType || 'Standard Vehicle';
+      const vehicleNumber = resolveVehicleNumberFromLookup(b, lookup);
+      const vehicleKey = `${vehicleName}__${vehicleNumber}`;
 
       if (!vehicleMap.has(vehicleKey)) {
         vehicleMap.set(vehicleKey, {
-          vehicleName: vehicleKey,
+          vehicleName,
+          vehicleNumber,
           totalTrips: 0,
           totalDistance: 0,
           totalRevenue: 0,
@@ -668,8 +778,16 @@ export async function getBookingInvoiceData(req: Request, res: Response) {
         {
           model: Vehicle,
           as: 'vehicle',
-          attributes: ['vehicleId', 'vehicleName'],
-          required: false
+          attributes: ['vehicleId', 'vehicleName', 'vehicleTypeId'],
+          required: false,
+          include: [
+            {
+              model: VehicleMaster,
+              as: 'vehicleMaster',
+              attributes: ['vehicleMasterId', 'vehicleNumber'],
+              required: false
+            }
+          ]
         },
         {
           model: VehicleMaster,
@@ -689,6 +807,10 @@ export async function getBookingInvoiceData(req: Request, res: Response) {
     if (!booking) {
       return res.status(404).json({ success: false, message: 'Booking not found' });
     }
+
+    const lookup = await getVehicleMasterLookupMaps();
+    const vehicleNumber = resolveVehicleNumberFromLookup(booking, lookup);
+    const vehicleName = booking.vehicle?.vehicleName || booking.preferredType || 'EasyRide Standard';
 
     const finalFare = Number(booking.finalFare) || 0;
     const isPaid = booking.paymentStatus === 'PAID' || booking.payment?.status === 'PAID' || booking.payment?.status === 'SUCCESS';
@@ -713,8 +835,12 @@ export async function getBookingInvoiceData(req: Request, res: Response) {
       drop: booking.dropPoint || (booking as any).dropLocation || 'N/A',
       driverName: booking.driver?.driverName || 'Unassigned',
       driverPhone: booking.driver?.phno || 'N/A',
-      vehicleName: booking.vehicle?.vehicleName || booking.preferredType || 'EasyRide Standard',
-      vehicleNumber: booking.vehicleMaster?.vehicleNumber || (booking as any).vehicleNumber || 'N/A',
+      vehicle: {
+        name: vehicleName,
+        vehicleNumber
+      },
+      vehicleName,
+      vehicleNumber,
       distanceKm,
       baseFare,
       perKmRate,
@@ -745,6 +871,7 @@ export async function exportReportExcel(req: Request, res: Response) {
   try {
     const where = buildDateWhereClause(req.query);
     const mode = (req.query.mode as string) || 'bookings'; // 'bookings' | 'overall' | 'customer'
+    const lookup = await getVehicleMasterLookupMaps();
 
     const bookings = await Booking.findAll({
       where,
@@ -764,8 +891,16 @@ export async function exportReportExcel(req: Request, res: Response) {
         {
           model: Vehicle,
           as: 'vehicle',
-          attributes: ['vehicleId', 'vehicleName'],
-          required: false
+          attributes: ['vehicleId', 'vehicleName', 'vehicleTypeId'],
+          required: false,
+          include: [
+            {
+              model: VehicleMaster,
+              as: 'vehicleMaster',
+              attributes: ['vehicleMasterId', 'vehicleNumber'],
+              required: false
+            }
+          ]
         },
         {
           model: VehicleMaster,
@@ -791,6 +926,8 @@ export async function exportReportExcel(req: Request, res: Response) {
       const isPaid = b.paymentStatus === 'PAID' || b.payment?.status === 'PAID' || b.payment?.status === 'SUCCESS';
       const paidAmount = isPaid ? finalFare : (Number(b.payment?.amount) || 0);
       const balance = Math.max(0, finalFare - paidAmount);
+      const vehicleName = b.vehicle?.vehicleName || b.preferredType || 'N/A';
+      const vehicleNumber = resolveVehicleNumberFromLookup(b, lookup);
 
       return {
         'Booking ID': b.bookingCode || b.bookingId,
@@ -799,8 +936,8 @@ export async function exportReportExcel(req: Request, res: Response) {
         'Customer Phone': b.user?.mobile || (b as any).riderPhone || b.behalfOfPhone || 'N/A',
         'Pickup': b.pickupPoint || b.pickupArea || 'N/A',
         'Drop': b.dropPoint || (b as any).dropLocation || 'N/A',
-
-        'Vehicle': b.vehicle?.vehicleName || b.preferredType || 'N/A',
+        'Vehicle': vehicleName,
+        'Vehicle Number': vehicleNumber,
         'Driver': b.driver?.driverName || 'Unassigned',
         'Distance (km)': Number(b.distanceKm) || 0,
         'Final Amount (₹)': finalFare,
@@ -810,6 +947,8 @@ export async function exportReportExcel(req: Request, res: Response) {
         'Booking Status': b.bookingStatus || 'PENDING'
       };
     });
+
+
 
     if (mode === 'overall') {
       // Sheet 1: Summary
@@ -903,11 +1042,43 @@ export async function exportReportExcel(req: Request, res: Response) {
       });
       const wsDrivers = XLSX.utils.json_to_sheet(Array.from(driverMap.values()));
       XLSX.utils.book_append_sheet(wb, wsDrivers, 'Drivers');
+
+      // Sheet 5: Vehicles
+      const vehicleSheetMap = new Map<string, any>();
+      bookings.forEach(b => {
+        const vehicleName = b.vehicle?.vehicleName || b.preferredType || 'Standard Vehicle';
+        const vehicleNumber = b.vehicleMaster?.vehicleNumber || (b as any).vehicleNumber || 'Not Added';
+        const key = `${vehicleName}__${vehicleNumber}`;
+        if (!vehicleSheetMap.has(key)) {
+          vehicleSheetMap.set(key, {
+            'Vehicle Name': vehicleName,
+            'Vehicle Number': vehicleNumber,
+            'Total Trips': 0,
+            'Total Distance (km)': 0,
+            'Total Revenue (₹)': 0,
+            'Paid (₹)': 0,
+            'Pending (₹)': 0
+          });
+        }
+        const v = vehicleSheetMap.get(key);
+        v['Total Trips']++;
+        v['Total Distance (km)'] += Number(b.distanceKm) || 0;
+        if (b.bookingStatus !== 'CANCELLED') {
+          const fare = Number(b.finalFare) || 0;
+          v['Total Revenue (₹)'] += fare;
+          const isPaid = b.paymentStatus === 'PAID' || b.payment?.status === 'PAID';
+          if (isPaid) v['Paid (₹)'] += fare;
+          else v['Pending (₹)'] += fare;
+        }
+      });
+      const wsVehicles = XLSX.utils.json_to_sheet(Array.from(vehicleSheetMap.values()));
+      XLSX.utils.book_append_sheet(wb, wsVehicles, 'Vehicles');
     } else {
       // Single sheet export for filtered bookings or single customer
       const ws = XLSX.utils.json_to_sheet(bookingRows);
       XLSX.utils.book_append_sheet(wb, ws, 'Report');
     }
+
 
     const buffer = XLSX.write(wb, { type: 'buffer', bookType: 'xlsx' });
 

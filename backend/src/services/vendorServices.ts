@@ -679,7 +679,7 @@ export const createDriver = async (req: any, res: Response) => {
 
 
 export const createVehicleType = async (req: any, res: Response) => {
-  const { vehicleType, seatCapacity, priorMinutes, baseFare, perKmRate } = req.body;
+  const { vehicleType, seatCapacity, priorMinutes, baseFare, perKmRate, vehicleNumber, vendorId } = req.body;
   try {
     const role = req.role;
     if (role === ROLES.USER) {
@@ -687,8 +687,40 @@ export const createVehicleType = async (req: any, res: Response) => {
     }
     const vehicleImg = req.files ? (req.files as Express.Multer.File[]).map(file => file.filename) : [];
 
+    if (!vehicleNumber || typeof vehicleNumber !== 'string' || !vehicleNumber.trim()) {
+      return res.status(400).json({ message: 'Vehicle registration number is required' });
+    }
+
+    const trimmedNumber = vehicleNumber.trim().toUpperCase();
+    const normalizedNumber = trimmedNumber.replace(/\s+/g, '');
+
+    // Check duplicate by normalized number (ignoring internal spaces)
+    const allExisting = await VehicleMaster.findAll({
+      where: { isDeleted: 0 }
+    });
+
+    const duplicate = allExisting.find(
+      v => (v.vehicleNumber || '').toUpperCase().replace(/\s+/g, '') === normalizedNumber
+    );
+
+    if (duplicate) {
+      return res.status(400).json({ message: `Vehicle number "${trimmedNumber}" is already registered` });
+    }
+
     const existing = await VehicleType.findOne({ where: { vehicleType } });
-    if (existing) return res.status(400).json({ message: 'Vehicle already registered' });
+    if (existing) return res.status(400).json({ message: 'Vehicle category already registered' });
+
+    // Validate or find vendor
+    let targetVendor = null;
+    if (vendorId) {
+      targetVendor = await Vendor.findByPk(vendorId);
+    }
+    if (!targetVendor) {
+      targetVendor = await Vendor.findOne({ where: { isDeleted: false } });
+    }
+    if (!targetVendor) {
+      return res.status(400).json({ message: 'No active vendor found in database. Please add a vendor first.' });
+    }
 
     const vehiType = await VehicleType.create({
       vehicleType,
@@ -700,42 +732,45 @@ export const createVehicleType = async (req: any, res: Response) => {
       isDeleted: false
     });
 
-    res.status(201).json({ message: 'Vehicle type created successfully', vehiType });
+    // Create base vehicle model for this category
+    const baseVehicle = await Vehicle.create({
+      vehicleName: vehicleType,
+      vehicleTypeId: vehiType.vehicleTypeId,
+      manufacturing: 'Standard',
+      availableStatus: 'AVAILABLE',
+      vehicleImg,
+      isDeleted: false
+    });
+
+    // Create corresponding VehicleMaster entry with valid vehicleId and vendorId
+    await VehicleMaster.create({
+      vehicleNumber: trimmedNumber,
+      vehicleId: baseVehicle.vehicleId,
+      vendorId: targetVendor.vendorId,
+      vendorName: targetVendor.vendorName,
+      vehicleModelName: vehicleType,
+      vehicleTypeId: vehiType.vehicleTypeId,
+      vehicleType: vehicleType,
+      isDeleted: 0
+    });
+
+    res.status(201).json({ message: 'Vehicle category created successfully', vehiType });
     return;
   } catch (err: any) {
+    console.error('Error creating vehicle category:', err);
     res.status(500).json({ error: err.message || err });
   }
 };
 
-
-// export const createVehicleType = async (req: any, res: Response) => {
-//   const { vehicleType, AdvanceBookingHours, seatCapacity } = req.body;
-//   try {
-//     const role = req.role;
-//     if (role === ROLES.USER) {
-//       return res.status(403).json({ message: 'Not Authorized' });
-//     }
-
-//     const existing = await VehicleType.findOne({ where: { vehicleType } });
-//     if (existing) return res.status(400).json({ message: 'Vehicle already registered' });
-
-//     const vehiType = await VehicleType.create({ vehicleType, AdvanceBookingHours, seatCapacity });
-
-//     res.status(201).json({ message: 'Vehicle type created successfully', vehiType });
-//     return;
-
-//   } catch (err) {
-//     res.status(500).json({ error: err });
-//   }
-// };
-
 export const createVehicle = async (req: any, res: Response) => {
- const {
-  vehicleName,
-  vehicleTypeId,
-  manufacturing,
-  availableStatus
-} = req.body;
+  const {
+    vehicleName,
+    vehicleTypeId,
+    manufacturing,
+    availableStatus,
+    vehicleNumber,
+    vendorId
+  } = req.body;
 
   const vehicleImg = req.files ? (req.files as Express.Multer.File[]).map(file => file.filename) : [];
 
@@ -745,21 +780,73 @@ export const createVehicle = async (req: any, res: Response) => {
       return res.status(403).json({ message: 'Not Authorized' });
     }
 
+    if (!vehicleNumber || typeof vehicleNumber !== 'string' || !vehicleNumber.trim()) {
+      return res.status(400).json({ message: 'Vehicle number is required' });
+    }
+
+    const trimmedNumber = vehicleNumber.trim().toUpperCase();
+    const normalizedNumber = trimmedNumber.replace(/\s+/g, '');
+
+    // Check duplicate by normalized number (ignoring internal spaces)
+    const allExisting = await VehicleMaster.findAll({
+      where: { isDeleted: 0 }
+    });
+
+    const duplicate = allExisting.find(
+      v => (v.vehicleNumber || '').toUpperCase().replace(/\s+/g, '') === normalizedNumber
+    );
+
+    if (duplicate) {
+      return res.status(400).json({ message: `Vehicle number "${trimmedNumber}" is already registered` });
+    }
+
     const existing = await Vehicle.findOne({ where: { vehicleTypeId, vehicleName } });
-    if (existing) return res.status(400).json({ message: 'Vehicle already registered' });
+    if (existing) return res.status(400).json({ message: 'Vehicle model name already registered for this type' });
+
+    // Validate or find vendor
+    let targetVendor = null;
+    if (vendorId) {
+      targetVendor = await Vendor.findByPk(vendorId);
+    }
+    if (!targetVendor) {
+      targetVendor = await Vendor.findOne({ where: { isDeleted: false } });
+    }
+    if (!targetVendor) {
+      return res.status(400).json({ message: 'No active vendor found in database. Please add a vendor first.' });
+    }
 
     const vehicle = await Vehicle.create({
-      vehicleName, vehicleTypeId, manufacturing, vehicleImg,
-      availableStatus
+      vehicleName,
+      vehicleTypeId,
+      manufacturing: manufacturing || 'Standard',
+      vehicleImg,
+      availableStatus: availableStatus || 'AVAILABLE',
+      isDeleted: false
+    });
+
+    const vType = await VehicleType.findByPk(vehicleTypeId);
+
+    // Create corresponding VehicleMaster entry with valid vehicleId and vendorId
+    await VehicleMaster.create({
+      vehicleNumber: trimmedNumber,
+      vehicleId: vehicle.vehicleId,
+      vendorId: targetVendor.vendorId,
+      vendorName: targetVendor.vendorName,
+      vehicleModelName: vehicleName,
+      vehicleTypeId,
+      vehicleType: vType?.vehicleType || '',
+      isDeleted: 0
     });
 
     res.status(201).json({ message: 'Registered successfully', vehicle });
     return;
 
-  } catch (err) {
-    res.status(500).json({ error: err });
+  } catch (err: any) {
+    console.error('Error creating vehicle:', err);
+    res.status(500).json({ error: err.message || err });
   }
 };
+
 
 
 
@@ -772,9 +859,24 @@ export const createVehicleMaster = async (req: any, res: Response) => {
       return res.status(403).json({ message: 'Not Authorized' });
     }
 
-    const existing = await VehicleMaster.findOne({ where: { vehicleNumber } });
-    if (existing) {
-      return res.status(400).json({ message: 'Vehicle already registered' });
+    if (!vehicleNumber || typeof vehicleNumber !== 'string' || !vehicleNumber.trim()) {
+      return res.status(400).json({ message: 'Vehicle number is required' });
+    }
+
+    const trimmedNumber = vehicleNumber.trim().toUpperCase();
+    const normalizedNumber = trimmedNumber.replace(/\s+/g, '');
+
+    // Check duplicate by normalized number (ignoring internal spaces)
+    const allExisting = await VehicleMaster.findAll({
+      where: { isDeleted: 0 }
+    });
+
+    const duplicate = allExisting.find(
+      v => (v.vehicleNumber || '').toUpperCase().replace(/\s+/g, '') === normalizedNumber
+    );
+
+    if (duplicate) {
+      return res.status(400).json({ message: `Vehicle number "${trimmedNumber}" is already registered` });
     }
 
     // Fetch vehicle details + type name
@@ -793,7 +895,7 @@ export const createVehicleMaster = async (req: any, res: Response) => {
     }
 
     const vehicleMaster = await VehicleMaster.create({
-      vehicleNumber,
+      vehicleNumber: trimmedNumber,
       vehicleId,
       vendorId,
       vehicleModelName: vehicleData.vehicleName,
@@ -808,6 +910,7 @@ export const createVehicleMaster = async (req: any, res: Response) => {
     res.status(500).json({ error: err instanceof Error ? err.message : String(err) });
   }
 };
+
 
 
 export const updateBookingVehicleDriver = async (req: any, res: Response) => {

@@ -12,12 +12,18 @@ import config from "../../../../config/config";
 interface VehicleModel {
   vehicleId: string;
   vehicleName: string;
+
   vehicleTypeId: string;
-    manufacturing: string;
+  manufacturing: string;
+  availableStatus?: string;
   isDeleted: boolean;
   vehicleImg?: string[]; // array of full URLs for display
   // optional: keep raw filenames if you need to tell backend which existing images to keep
   vehicleImgFiles?: string[];
+  vehicleMaster?: {
+    vehicleNumber?: string;
+  };
+  vehicleNumber?: string;
 }
 
 interface VehicleType {
@@ -84,8 +90,10 @@ const ListVehicleModel: React.FC = () => {
         // backend returns vehicleImg as array of filenames OR full urls
         const rawImgs = Array.isArray(v.vehicleImg) ? v.vehicleImg : (v.vehicleImg ? [v.vehicleImg] : []);
         const urls = rawImgs.map((f: string) => buildImageUrl(f));
+        const vNumber = v.vehicleMaster?.vehicleNumber || v.vehicleNumber || 'Not Added';
         return {
           ...v,
+          vehicleNumber: vNumber,
           vehicleImg: urls,
           vehicleImgFiles: rawImgs // keep originals (filenames) if you later need to send existing ones back
         } as VehicleModel;
@@ -114,7 +122,8 @@ const ListVehicleModel: React.FC = () => {
       const vehicles = (response.data || []).map((v: any) => {
         const rawImgs = Array.isArray(v.vehicleImg) ? v.vehicleImg : (v.vehicleImg ? [v.vehicleImg] : []);
         const urls = rawImgs.map((f: string) => buildImageUrl(f));
-        return { ...v, vehicleImg: urls, vehicleImgFiles: rawImgs } as VehicleModel;
+        const vNumber = v.vehicleMaster?.vehicleNumber || v.vehicleNumber || 'Not Added';
+        return { ...v, vehicleNumber: vNumber, vehicleImg: urls, vehicleImgFiles: rawImgs } as VehicleModel;
       });
       setVehicleModels(vehicles);
     } catch (err) {
@@ -123,6 +132,7 @@ const ListVehicleModel: React.FC = () => {
       setLoading(false);
     }
   };
+
 
   const handleDelete = (row: VehicleModel) => {
     setModal({
@@ -174,8 +184,11 @@ const ListVehicleModel: React.FC = () => {
 
   const openEdit = (v: VehicleModel) => {
     setEditId(v.vehicleId);
-    // set editData with values; keep vehicleImg as urls for preview and vehicleImgFiles if you need filenames
-    setEditData({ ...v, vehicleTypeId: v.vehicleTypeId });
+    setEditData({
+      ...v,
+      vehicleTypeId: v.vehicleTypeId,
+      vehicleNumber: v.vehicleNumber === 'Not Added' ? '' : (v.vehicleNumber || '')
+    });
     setEditFiles([]);
   };
 
@@ -194,13 +207,8 @@ const ListVehicleModel: React.FC = () => {
 
         if (editData.vehicleName) formData.append('vehicleName', String(editData.vehicleName));
         if (editData.vehicleTypeId) formData.append('vehicleTypeId', String(editData.vehicleTypeId));
-        if (editData.manufacturing)
-  formData.append('manufacturing', String(editData.manufacturing));
-
-        // if (editData.localPerHour != null) formData.append('localPerHour', String(editData.localPerHour));
-        // if (editData.localPerKm != null) formData.append('localPerKm', String(editData.localPerKm));
-        // if (editData.OutstationPerKm != null) formData.append('OutstationPerKm', String(editData.OutstationPerKm));
-        // if (editData.OSDriverBata != null) formData.append('OSDriverBata', String(editData.OSDriverBata));
+        if (editData.manufacturing) formData.append('manufacturing', String(editData.manufacturing));
+        if (editData.vehicleNumber) formData.append('vehicleNumber', String(editData.vehicleNumber).trim().toUpperCase());
 
         // if you want to tell backend which existing filenames to keep, send them here
         if (editData.vehicleImgFiles && editData.vehicleImgFiles.length > 0) {
@@ -217,15 +225,19 @@ const ListVehicleModel: React.FC = () => {
         });
       } else {
         // no new files — send json
-        await axiosInstance.put(`/vehicle/${editId}/updateVehicle`, editData);
+        const payload = {
+          ...editData,
+          vehicleNumber: editData.vehicleNumber ? String(editData.vehicleNumber).trim().toUpperCase() : undefined
+        };
+        await axiosInstance.put(`/vehicle/${editId}/updateVehicle`, payload);
       }
 
       showToast('Vehicle updated successfully!', 'success');
       fetchVehicles();
       closeEdit();
-    } catch (error) {
+    } catch (error: any) {
       console.error(error);
-      showToast('Failed to update vehicle.', 'error');
+      showToast(error.response?.data?.message || 'Failed to update vehicle.', 'error');
     }
   };
 
@@ -255,8 +267,29 @@ const ListVehicleModel: React.FC = () => {
       accessor: 'vehicleTypeId',
       render: (row: VehicleModel) => vehicleTypeMap[row.vehicleTypeId] || 'Unknown'
     },
-{ header: 'Manufacturer', accessor: 'manufacturing' },
-
+    {
+      header: 'Vehicle Number',
+      accessor: 'vehicleNumber',
+      render: (row: VehicleModel) => (
+        <span className={`px-2 py-1 rounded text-xs font-bold ${
+          row.vehicleNumber && row.vehicleNumber !== 'Not Added'
+            ? 'bg-slate-900 text-white font-mono'
+            : 'bg-amber-100 text-amber-800'
+        }`}>
+          {row.vehicleNumber || 'Not Added'}
+        </span>
+      )
+    },
+    {
+      header: 'Status',
+      accessor: 'availableStatus',
+      render: (row: VehicleModel) => (
+        <span className="px-2 py-0.5 rounded text-xs font-semibold bg-emerald-100 text-emerald-800 uppercase">
+          {row.availableStatus || 'AVAILABLE'}
+        </span>
+      )
+    },
+    { header: 'Manufacturer', accessor: 'manufacturing' },
   ];
 
   return (
@@ -276,7 +309,7 @@ const ListVehicleModel: React.FC = () => {
 
         <div className="flex flex-col sm:flex-row justify-between items-center mb-6 space-y-4 sm:space-y-0 sm:space-x-4">
           <SearchBar
-            placeholder="Search (Vehicle Name)"
+            placeholder="Search (Vehicle Name or Number)"
             value={search}
             onChange={(e) => setSearch(e.target.value)}
             onSearch={handleSearch}
@@ -320,7 +353,18 @@ const ListVehicleModel: React.FC = () => {
                     onChange={(e) =>
                       setEditData({ ...editData, vehicleName: e.target.value })
                     }
-                    className="w-full p-2 border"
+                    className="w-full p-2 border rounded"
+                  />
+
+                  <label className="block text-sm mt-2 mb-1">Vehicle Number</label>
+                  <input
+                    type="text"
+                    placeholder="e.g. TN 76 AB 1234"
+                    value={editData.vehicleNumber || ''}
+                    onChange={(e) =>
+                      setEditData({ ...editData, vehicleNumber: e.target.value })
+                    }
+                    className="w-full p-2 border rounded font-mono uppercase"
                   />
 
                   <label className="block text-sm mt-2 mb-1">Vehicle Type</label>
@@ -329,7 +373,7 @@ const ListVehicleModel: React.FC = () => {
                     onChange={(e) =>
                       setEditData({ ...editData, vehicleTypeId: e.target.value })
                     }
-                    className="w-full p-2 border"
+                    className="w-full p-2 border rounded"
                   >
                     <option value="">-- Select Vehicle Type --</option>
                     {Object.entries(vehicleTypeMap).map(([id, name]) => (
@@ -338,65 +382,19 @@ const ListVehicleModel: React.FC = () => {
                       </option>
                     ))}
                   </select>
-<label className="block text-sm mt-2 mb-1">Manufacturer</label>
-<input
-  type="text"
-  value={editData.manufacturing || ''}
-  onChange={(e) =>
-    setEditData({ ...editData, manufacturing: e.target.value })
-  }
-  className="w-full p-2 border"
-/>
-                  {/* <label className="block text-sm mt-2 mb-1">Local Per Hour ₹</label>
+
+                  <label className="block text-sm mt-2 mb-1">Manufacturer</label>
                   <input
-                    type="number"
-                    value={editData.localPerHour ?? ''}
+                    type="text"
+                    value={editData.manufacturing || ''}
                     onChange={(e) =>
-                      setEditData({ ...editData, localPerHour: Number(e.target.value) })
+                      setEditData({ ...editData, manufacturing: e.target.value })
                     }
-                    className="w-full p-2 border"
-                  /> */}
+                    className="w-full p-2 border rounded"
+                  />
                 </div>
-
-
-                {/* <div>
-                  <label className="block text-sm mb-1">Local Per Km ₹</label>
-                  <input
-                    type="number"
-                    value={editData.localPerKm ?? ''}
-                    onChange={(e) =>
-                      setEditData({ ...editData, localPerKm: Number(e.target.value) })
-                    }
-                    className="w-full p-2 border"
-                  />
-
-                  <label className="block text-sm mt-2 mb-1">Outstation Per Km ₹</label>
-                  <input
-                    type="number"
-                    value={editData.OutstationPerKm ?? ''}
-                    onChange={(e) =>
-                      setEditData({
-                        ...editData,
-                        OutstationPerKm: Number(e.target.value),
-                      })
-                    }
-                    className="w-full p-2 border"
-                  />
-
-                  <label className="block text-sm mt-2 mb-1">Driver Batta ₹</label>
-                  <input
-                    type="number"
-                    value={editData.OSDriverBata ?? ''}
-                    onChange={(e) =>
-                      setEditData({
-                        ...editData,
-                        OSDriverBata: Number(e.target.value),
-                      })
-                    }
-                    className="w-full p-2 border"
-                  />
-                </div> */}
               </div>
+
 
               {/* Images preview and upload */}
               <div className="mt-4">

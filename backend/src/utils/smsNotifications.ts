@@ -128,8 +128,8 @@ export async function sendSmsNotifications(options: {
           `&var1=${encodeURIComponent(booking.behalfOfName || customerName)}` +
           `&var2=${encodeURIComponent(driverName)}` +
           `&var3=${encodeURIComponent(driverPhoneRaw)}` +
-          `&var4=${encodeURIComponent(vehicleName)}` +
-          `&var5=${encodeURIComponent(vehicleNumber)}` +
+          `&var4=${encodeURIComponent(vehicleName || "Standard")}` +
+          `&var5=${encodeURIComponent(vehicleNumber || "Not Added")}` +
           `&var6=${encodeURIComponent(formattedBookingDate || "")}` +
           `&var7=${encodeURIComponent("EasyRide")}` +
           `&var8=${encodeURIComponent(companySupportPhone)}`;
@@ -146,11 +146,12 @@ export async function sendSmsNotifications(options: {
           `&var4=${encodeURIComponent(formattedBookingDate || "")}` +
           `&var5=${encodeURIComponent(driverName)}` +
           `&var6=${encodeURIComponent(driverPhoneRaw)}` +
-          `&var7=${encodeURIComponent(vehicleName)}` +
-          `&var8=${encodeURIComponent(vehicleNumber)}` +
+          `&var7=${encodeURIComponent(vehicleName || "Standard")}` +
+          `&var8=${encodeURIComponent(vehicleNumber || "Not Added")}` +
           `&var9=${encodeURIComponent("EasyRide")}` +
           `&var10=${encodeURIComponent(companySupportPhone)}`;
       }
+
 
 
       const r = await sendSmsVia2Factor(url, "user");

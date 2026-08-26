@@ -13,6 +13,7 @@ import {
   faList,
   faTachometerAlt,
   faUserClock,
+  faIdCard
 } from '@fortawesome/free-solid-svg-icons';
 import { showToast, AlertContainer } from '../../../../components/AlertBox';
 import axiosInstance from '../../../../utils/axiosInstance';
@@ -68,14 +69,10 @@ const handleVehicleImageChange = (name: string, value: any) => {
     }
 
     if (
-      !formValues.vehicleName ||
+      !formValues.vehicleName?.trim() ||
+      !formValues.vehicleNumber?.trim() ||
       !formValues.vehicleTypeId ||
-      // !formValues.localPerHour ||
-      // !formValues.localPerKm ||
-      // !formValues.outStationPerKm ||
-      // !formValues.outStationDriverBatta ||
       !formValues.manufacturing ||
-
       !formValues.vehicleImage
     ) {
       showToast('Please fill all required fields.', 'error');
@@ -84,15 +81,11 @@ const handleVehicleImageChange = (name: string, value: any) => {
 
     try {
       const formData = new FormData();
-      formData.append('vehicleName', formValues.vehicleName);
+      formData.append('vehicleName', formValues.vehicleName.trim());
+      formData.append('vehicleNumber', formValues.vehicleNumber.trim().toUpperCase());
       formData.append('vehicleTypeId', formValues.vehicleTypeId);
       formData.append('vehicleType', formValues.vehicleTypeLabel || '');
-      // formData.append('localPerHour', formValues.localPerHour);
-      // formData.append('localPerKm', formValues.localPerKm);
-      // formData.append('OutstationPerKm', formValues.outStationPerKm);
-      // formData.append('OSDriverBata', formValues.outStationDriverBatta);
       formData.append('manufacturing', formValues.manufacturing);
-
       formData.append('vehicleImg', formValues.vehicleImage as Blob);
       formData.append('availableStatus', 'Available');
 
@@ -100,7 +93,7 @@ const handleVehicleImageChange = (name: string, value: any) => {
         headers: { 'Content-Type': 'multipart/form-data' },
       });
 
-      showToast('Vehicle model saved successfully!', 'success');
+      showToast('Vehicle saved successfully!', 'success');
       setTimeout(() => navigate('/vehicle/vehiclemodel/list'), 1000);
     } catch (err: any) {
       showToast(err.response?.data?.message || 'Something went wrong. Please try again.', 'error');
@@ -121,20 +114,21 @@ const handleVehicleImageChange = (name: string, value: any) => {
           <div className="grid grid-cols-1 md:grid-cols-2 gap-x-16 gap-y-6">
             {/* Left Column */}
             <div className="flex flex-col gap-4">
-              <InputBox label="Vehicle Name" name="vehicleName" placeholder="Vehicle Name" required icon={faCar} />
-              {/* <InputBox label="Local Per Hour" name="localPerHour" placeholder="Per Hour" required icon={faClock} />
-              <InputBox label="Out Station Per Km" name="outStationPerKm" placeholder="Per Km" required icon={faRoad} /> */}
-<InputBox
-  label="Manufacturer"
-  name="manufacturing"
-  placeholder="Manufacturer"
-  required
-  icon={faCogs}
-/>
-
-   
-     
-
+              <InputBox label="Vehicle Name" name="vehicleName" placeholder="e.g. Sedan" required icon={faCar} />
+              <InputBox
+                label="Vehicle Number"
+                name="vehicleNumber"
+                placeholder="TN 76 AB 1234"
+                required
+                icon={faIdCard}
+              />
+              <InputBox
+                label="Manufacturer"
+                name="manufacturing"
+                placeholder="Manufacturer"
+                required
+                icon={faCogs}
+              />
             </div>
 
             {/* Right Column */}
@@ -146,52 +140,41 @@ const handleVehicleImageChange = (name: string, value: any) => {
                 required
                 icon={faList}
               />
-              {/* <InputBox label="Local Per Km" name="localPerKm" placeholder="Per Km" required icon={faTachometerAlt} />
-              <InputBox
-                label="Out Station Driver Batta Per Day"
-                name="outStationDriverBatta"
-                placeholder="Driver Batta"
-                required
-                icon={faUserClock}
-              /> */}
 
-                             <div>
-                  <label className="block text-sm font-medium text-black mb-1">
-    Vehicle Image
-  </label>
-  <input
-    type="file"
-    accept="image/*"
-    onChange={(e) => {
-      const file = e.target.files?.[0];
-      if (file) {
-        // ✅ 1 MB size check
-        if (file.size > 1 * 1024 * 1024) {
-          showToast("Image too large! Please select below 1 MB.", "error");
-          e.target.value = ""; // reset input
-          return;
-        }
+              <div>
+                <label className="block text-sm font-medium text-black mb-1">
+                  Vehicle Image
+                </label>
+                <input
+                  type="file"
+                  accept="image/*"
+                  onChange={(e) => {
+                    const file = e.target.files?.[0];
+                    if (file) {
+                      // 1 MB size check
+                      if (file.size > 1 * 1024 * 1024) {
+                        showToast("Image too large! Please select below 1 MB.", "error");
+                        e.target.value = ""; // reset input
+                        return;
+                      }
 
-        // ✅ show preview & store file
-        setVehicleImagePreview(URL.createObjectURL(file));
-        getFormStore().vehicleImage = file;
-      }
-    }}
-      className="block w-full border border-gray-300 rounded-lg p-2"
+                      // show preview & store file
+                      setVehicleImagePreview(URL.createObjectURL(file));
+                      getFormStore().vehicleImage = file;
+                    }
+                  }}
+                  className="block w-full border border-gray-300 rounded-lg p-2"
+                />
 
-  />
-
-  {vehicleImagePreview && (
-    <img
-      src={vehicleImagePreview}
-      alt="Vehicle Preview"
-      className="mt-2 w-48 h-32 object-cover border rounded"
-    />
-  )}
-</div>
+                {vehicleImagePreview && (
+                  <img
+                    src={vehicleImagePreview}
+                    alt="Vehicle Preview"
+                    className="mt-2 w-48 h-32 object-cover border rounded"
+                  />
+                )}
+              </div>
             </div>
-
-      
           </div>
 
           <div className="flex justify-end mt-6">
@@ -201,6 +184,7 @@ const handleVehicleImageChange = (name: string, value: any) => {
           </div>
         </form>
       </div>
+
     </PageLayout>
   );
 };

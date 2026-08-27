@@ -254,8 +254,22 @@ export const AuthModal: React.FC<AuthModalProps> = ({
                 <span>Sign In</span>
               )}
             </button>
+
+            <div className="pt-3 text-center border-t border-slate-100 mt-3">
+              <p className="text-xs text-slate-500">
+                Are you an EasyRide Driver?{" "}
+                <a
+                  href="/driver/login"
+                  onClick={() => onClose()}
+                  className="font-bold text-amber-600 hover:text-amber-700 hover:underline"
+                >
+                  Driver Login Portal →
+                </a>
+              </p>
+            </div>
           </form>
         )}
+
 
         {/* Sign Up Form */}
         {tab === "signup" && (

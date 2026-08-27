@@ -1,7 +1,9 @@
 import { Request, Response } from 'express';
+import bcrypt from 'bcrypt';
 import { Vendor } from '../models/vendor';
 import { Vehicle } from '../models/vehicle';
 import { Drivers } from '../models/drivers';
+
 import { Booking } from '../models/booking';
 import { Company } from '../models/company';
 import { Employee } from '../models/employee';
@@ -573,10 +575,14 @@ export const createDriver = async (req: any, res: Response) => {
       return res.status(400).json({ message: 'Phone number already exists' });
     }
 
+    const hashedPassword = password ? await bcrypt.hash(password, 10) : await bcrypt.hash(String(phno).slice(-6), 10);
+
     const driver = await Drivers.create({
-      driverName, driverEmail, phno, password, city, state, country, address,role: role,
-      pincode, licenseNo, licExpDate, vehicleTypeId, trackingsource:trackingSource
+      driverName, driverEmail, phno, password: hashedPassword, city, state, country, address, role: role,
+      pincode, licenseNo, licExpDate, vehicleTypeId, trackingsource: trackingSource,
+      status: 'AVAILABLE', isAvailable: true
     });
+
 
     const driverWithVehicle = await Drivers.findOne({
       where: { driverId: driver.driverId },

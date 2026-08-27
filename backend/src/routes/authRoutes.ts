@@ -1,13 +1,19 @@
 import express from 'express';
 import { empRegister, empLogin,registerUser ,userLogin, vendorLogin, ownerRegister,sendOTP, verifyOTPLogin, resendOTP, forgetPassword, 
     forgetPasswordSendOtp,verifyOtpPassword,CompanyLogin,changePassword} from '../services/authServices';
-
+import { driverLogin, driverRegister } from '../services/driverServices';
 
 const router = express.Router();
 
 router.post('/empRegister', empRegister);
 router.post('/empLogin', empLogin);
+router.post('/driver/register', driverRegister);
+router.post('/driverRegister', driverRegister);
+router.post('/driver/login', driverLogin);
+router.post('/driverLogin', driverLogin);
 router.post('/createUser', registerUser); 
+
+
 router.post('/signup', registerUser);
 router.post('/userLogin', userLogin);
 router.post('/login', userLogin);

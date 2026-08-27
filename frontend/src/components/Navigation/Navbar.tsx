@@ -164,19 +164,39 @@ export const Navbar: React.FC<NavbarProps> = ({ transparent = false }) => {
             <ShieldCheck size={13} /> 24/7 Verified Chauffeurs & Corporate Cabs
           </span>
           {isAuthenticated ? (
-            <span className="text-slate-400">
-              Welcome, <strong className="text-white font-semibold">{displayName}</strong>
-            </span>
+            <div className="flex items-center gap-3">
+              <span className="text-slate-400">
+                Welcome, <strong className="text-white font-semibold">{displayName}</strong>
+              </span>
+              {role === "driver" && (
+                <Link
+                  to="/driver/dashboard"
+                  className="px-2.5 py-0.5 rounded-full bg-amber-500 text-slate-950 font-bold hover:bg-amber-400 transition-colors text-[10px]"
+                >
+                  Driver Portal →
+                </Link>
+              )}
+            </div>
           ) : (
-            <button 
-              onClick={openSignIn}
-              className="hover:text-amber-400 transition-colors font-medium text-slate-300"
-            >
-              Sign In / Register →
-            </button>
+            <div className="flex items-center gap-3">
+              <button 
+                onClick={openSignIn}
+                className="hover:text-amber-400 transition-colors font-medium text-slate-300"
+              >
+                Sign In / Register
+              </button>
+              <span className="text-slate-600">|</span>
+              <Link
+                to="/driver/login"
+                className="text-amber-400 hover:text-amber-300 font-bold transition-colors flex items-center gap-1"
+              >
+                <Car size={12} /> Driver Login →
+              </Link>
+            </div>
           )}
         </div>
       </div>
+
 
       {/* Main Navbar */}
       <header
@@ -386,6 +406,16 @@ export const Navbar: React.FC<NavbarProps> = ({ transparent = false }) => {
                       <Calendar size={16} /> My Bookings
                     </Link>
 
+                    {role === "driver" && (
+                      <Link
+                        to="/driver/dashboard"
+                        onClick={() => setUserDropdownOpen(false)}
+                        className="flex items-center gap-2.5 px-4 py-2.5 text-sm font-bold text-amber-600 bg-amber-50 hover:bg-amber-100"
+                      >
+                        <Car size={16} /> Driver Portal
+                      </Link>
+                    )}
+
                     {role === "superadmin" && (
                       <Link
                         to="/dashboard"
@@ -395,6 +425,7 @@ export const Navbar: React.FC<NavbarProps> = ({ transparent = false }) => {
                         <UserIcon size={16} /> Admin Dashboard
                       </Link>
                     )}
+
 
                     <button
                       onClick={handleLogout}
@@ -489,6 +520,15 @@ export const Navbar: React.FC<NavbarProps> = ({ transparent = false }) => {
                   <div className="px-3 py-1.5 text-xs text-slate-500 font-medium">
                     Signed in as <strong className="text-slate-900">{displayName}</strong>
                   </div>
+                  {role === "driver" && (
+                    <Link
+                      to="/driver/dashboard"
+                      onClick={() => setMobileMenuOpen(false)}
+                      className="block px-3 py-2 rounded-lg text-sm font-bold text-amber-600 bg-amber-50"
+                    >
+                      Driver Dashboard
+                    </Link>
+                  )}
                   {role === "superadmin" && (
                     <Link
                       to="/dashboard"
@@ -506,23 +546,33 @@ export const Navbar: React.FC<NavbarProps> = ({ transparent = false }) => {
                   </button>
                 </div>
               ) : (
-                <div className="grid grid-cols-2 gap-2 pt-2">
-                  <button
-                    type="button"
-                    onClick={openSignIn}
-                    className="w-full text-center px-4 py-2.5 rounded-xl border border-slate-300 text-slate-800 font-bold text-sm hover:bg-slate-50"
-                  >
-                    Sign In
-                  </button>
+                <div className="space-y-2 pt-2">
+                  <div className="grid grid-cols-2 gap-2">
+                    <button
+                      type="button"
+                      onClick={openSignIn}
+                      className="w-full text-center px-4 py-2.5 rounded-xl border border-slate-300 text-slate-800 font-bold text-sm hover:bg-slate-50"
+                    >
+                      Sign In
+                    </button>
+                    <Link
+                      to="/book"
+                      onClick={() => setMobileMenuOpen(false)}
+                      className="w-full text-center px-4 py-2.5 rounded-xl bg-amber-500 text-slate-950 font-bold text-sm shadow-md"
+                    >
+                      Book Ride
+                    </Link>
+                  </div>
                   <Link
-                    to="/book"
+                    to="/driver/login"
                     onClick={() => setMobileMenuOpen(false)}
-                    className="w-full text-center px-4 py-2.5 rounded-xl bg-amber-500 text-slate-950 font-bold text-sm shadow-md"
+                    className="block text-center py-2.5 px-4 rounded-xl bg-slate-900 text-amber-400 font-bold text-xs shadow-sm hover:bg-slate-800"
                   >
-                    Book Ride
+                    🚗 Driver Login / Portal →
                   </Link>
                 </div>
               )}
+
             </div>
           </div>
         )}

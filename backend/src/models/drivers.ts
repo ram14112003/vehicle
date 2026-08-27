@@ -160,7 +160,33 @@ export class Drivers extends Model {
   })
   status!: string;
 
+  @Column({
+    type: DataType.BOOLEAN,
+    defaultValue: true,
+    allowNull: true,
+  })
+  isAvailable!: boolean;
+
+  @Column({
+    type: DataType.DATE,
+    allowNull: true,
+  })
+  lastSeenAt?: Date;
+
+  @Column({
+    type: DataType.DATE,
+    allowNull: true,
+  })
+  lastLoginAt?: Date;
+
+  @Column({
+    type: DataType.DATE,
+    allowNull: true,
+  })
+  lastLogoutAt?: Date;
+
   @HasMany(() => Booking)
   bookings!: Booking[];
 }
+
 

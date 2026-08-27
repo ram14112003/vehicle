@@ -5034,7 +5034,7 @@ export const getAllAdminBookings = async (req: Request, res: Response) => {
 // 🚀 POST-RIDE PAYMENT & LIFECYCLE CONTROLLERS
 // ==========================================
 
-// 1️⃣ Get Available Drivers (strictly validates status & active trips)
+// 1️⃣ Get Available Drivers (strictly validates status, active session & active trips)
 export const getAvailableDrivers = async (req: Request, res: Response) => {
   try {
     // Find all active bookings that currently occupy a driver
@@ -5052,27 +5052,82 @@ export const getAvailableDrivers = async (req: Request, res: Response) => {
       .map((b) => b.driverId)
       .filter((id): id is string => Boolean(id));
 
+    // A driver must be active, AVAILABLE, and have logged in
     const whereDriver: any = {
-      isDeleted: false
+      isDeleted: false,
+      isAvailable: true,
+      status: "AVAILABLE",
+      lastLoginAt: { [Op.ne]: null }
     };
 
     if (busyDriverIds.length > 0) {
       whereDriver.driverId = { [Op.notIn]: busyDriverIds };
     }
 
-    const availableDrivers = await Drivers.findAll({
+    const drivers = await Drivers.unscoped().findAll({
       where: whereDriver,
       include: [
-        { model: Vehicle, as: "vehicle", required: false },
+        {
+          model: Vehicle,
+          as: "vehicle",
+          required: false,
+          include: [{ model: VehicleMaster, as: "vehicleMaster", required: false }]
+        },
         { model: VehicleType, as: "vehicleType", required: false }
       ],
       order: [["driverName", "ASC"]]
     });
 
+    // Check heartbeat/session threshold (within 15 minutes of activity or active login)
+    const now = new Date().getTime();
+    const fifteenMinutes = 15 * 60 * 1000;
+
+    const filteredDrivers = drivers.filter((d: any) => {
+      // Must not be logged out after last login
+      if (d.lastLogoutAt && d.lastLoginAt) {
+        if (new Date(d.lastLogoutAt).getTime() >= new Date(d.lastLoginAt).getTime()) {
+          return false;
+        }
+      }
+      // Must have active session heartbeat or recent login
+      const lastActive = d.lastSeenAt || d.lastLoginAt;
+      if (!lastActive) return false;
+      const diff = now - new Date(lastActive).getTime();
+      return diff <= fifteenMinutes;
+    });
+
+    // Resolve vehicle numbers dynamically from VehicleMaster
+    const vehicleMasters = await VehicleMaster.findAll({ where: { isDeleted: false } });
+    const vmByVehicleId = new Map<string, string>();
+    vehicleMasters.forEach((vm) => {
+      if (vm.vehicleId && vm.vehicleNumber) vmByVehicleId.set(vm.vehicleId, vm.vehicleNumber);
+    });
+
+    const enrichedDrivers = filteredDrivers.map((d: any) => {
+      const json = d.toJSON();
+      const vehicleName = d.vehicle?.vehicleName || d.vehicleType?.vehicleType || "Standard Vehicle";
+      const vehicleNo = d.vehicle?.vehicleMaster?.vehicleNumber ||
+        (d.vehicleId ? vmByVehicleId.get(d.vehicleId) : null) ||
+        d.vehicle?.vehicleNumber ||
+        "Not Added";
+
+      return {
+        ...json,
+        vehicleName,
+        vehicleNumber: vehicleNo,
+        vehicle: {
+          ...(json.vehicle || {}),
+          vehicleName,
+          vehicleNo,
+          vehicleNumber: vehicleNo
+        }
+      };
+    });
+
     return res.status(200).json({
       success: true,
-      count: availableDrivers.length,
-      data: availableDrivers
+      count: enrichedDrivers.length,
+      data: enrichedDrivers
     });
   } catch (error: any) {
     console.error("Get Available Drivers Error:", error);
@@ -5088,8 +5143,8 @@ export const getAvailableDrivers = async (req: Request, res: Response) => {
 export const assignDriverToBooking = async (req: Request, res: Response) => {
   const transaction = await Booking.sequelize!.transaction();
   try {
-    const bookingId = req.params.bookingId || req.body.bookingId;
-    const { driverId } = req.body;
+    const bookingId = req.params?.bookingId || req.body?.bookingId;
+    const { driverId } = req.body || {};
 
     if (!bookingId || !driverId) {
       await transaction.rollback();
@@ -5098,6 +5153,7 @@ export const assignDriverToBooking = async (req: Request, res: Response) => {
         message: "Booking ID and Driver ID are required"
       });
     }
+
 
     const booking = await Booking.findByPk(bookingId, { transaction });
     if (!booking) {
@@ -5122,6 +5178,15 @@ export const assignDriverToBooking = async (req: Request, res: Response) => {
       });
     }
 
+    // Verify driver is available
+    if (!driver.isAvailable || driver.status === "OFFLINE") {
+      await transaction.rollback();
+      return res.status(400).json({
+        success: false,
+        message: "Driver is currently OFFLINE and cannot be assigned to a booking."
+      });
+    }
+
     // Check if driver is already occupied
     const activeBooking = await Booking.findOne({
       where: {
@@ -5141,6 +5206,7 @@ export const assignDriverToBooking = async (req: Request, res: Response) => {
         message: "Driver is no longer available. Assigned to another active trip."
       });
     }
+
 
     // Update booking & driver status in atomic transaction
     await booking.update(

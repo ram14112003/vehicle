@@ -1,16 +1,680 @@
 import { Request, Response } from 'express';
+import bcrypt from 'bcrypt';
 import { Drivers } from '../models';
 import { Vehicle } from '../models/vehicle';
 import { Booking } from '../models/booking';
 import { VehicleType } from '../models/vehicleType';
+import { VehicleMaster } from '../models/vehicleMaster';
 import { User } from '../models/user';
 import { DriverNotification } from '../models/driverNotification';
-import { USERS } from "../utils/costants";
-import { ORDER } from '../utils/costants';
+import { USERS, ORDER } from "../utils/costants";
+import { Security } from '../utils/Security';
 import { Op } from "sequelize";
-
+import { AuthenticatedRequest } from '../middleware/authMiddleware';
 
 const { ROLES } = USERS;
+
+// 0. Driver Self-Registration (/driver/register)
+export const driverRegister = async (req: Request, res: Response) => {
+  try {
+    const {
+      driverName,
+      name,
+      phno,
+      mobile,
+      phone,
+      driverEmail,
+      email,
+      licenseNo,
+      password,
+      confirmPassword,
+      city,
+      state
+    } = req.body;
+
+    const fullName = String(driverName || name || '').trim();
+    const rawPhone = String(phno || mobile || phone || '').trim();
+    const userEmail = driverEmail || email ? String(driverEmail || email).trim().toLowerCase() : null;
+    const userPass = String(password || '').trim();
+    const confirmPass = String(confirmPassword || '').trim();
+
+    if (!fullName) {
+      return res.status(400).json({ success: false, message: 'Full name is required.' });
+    }
+
+    if (!rawPhone) {
+      return res.status(400).json({ success: false, message: 'Mobile number is required.' });
+    }
+
+    const cleanPhone = rawPhone.replace(/[^0-9+]/g, '').trim();
+    if (cleanPhone.length < 10) {
+      return res.status(400).json({
+        success: false,
+        message: 'Please enter a valid mobile number (at least 10 digits).'
+      });
+    }
+
+    if (!userPass) {
+      return res.status(400).json({ success: false, message: 'Password is required.' });
+    }
+
+    if (userPass.length < 6) {
+      return res.status(400).json({
+        success: false,
+        message: 'Password must be at least 6 characters long.'
+      });
+    }
+
+    if (confirmPass && userPass !== confirmPass) {
+      return res.status(400).json({
+        success: false,
+        message: 'Password and Confirm Password do not match.'
+      });
+    }
+
+    if (userEmail && !/^\S+@\S+\.\S+$/.test(userEmail)) {
+      return res.status(400).json({
+        success: false,
+        message: 'Please enter a valid email address.'
+      });
+    }
+
+    // Check if phone or email already exists in Drivers table
+    const whereOr: any[] = [{ phno: cleanPhone }];
+    if (cleanPhone.length >= 10) {
+      whereOr.push({ phno: { [Op.like]: `%${cleanPhone.slice(-10)}` } });
+    }
+    if (userEmail) {
+      whereOr.push({ driverEmail: userEmail });
+    }
+
+    const existingDriver = await Drivers.unscoped().findOne({
+      where: {
+        [Op.or]: whereOr,
+        isDeleted: false
+      }
+    });
+
+    if (existingDriver) {
+      return res.status(400).json({
+        success: false,
+        message: 'Driver account already exists. Please login.'
+      });
+    }
+
+    // Clean or generate default license format
+    let cleanLicense = licenseNo ? String(licenseNo).trim().toUpperCase() : null;
+    if (cleanLicense) {
+      const existingLicense = await Drivers.unscoped().findOne({
+        where: { licenseNo: cleanLicense, isDeleted: false }
+      });
+      if (existingLicense) {
+        return res.status(400).json({
+          success: false,
+          message: 'A driver with this license number already exists.'
+        });
+      }
+    } else {
+      cleanLicense = `DL-TN-${cleanPhone.slice(-6)}`;
+    }
+
+    // Hash password with bcrypt
+    const hashedPassword = await bcrypt.hash(userPass, 10);
+
+    // Initial state must be OFFLINE and NOT available until first successful login!
+    const newDriver = await Drivers.create({
+      driverName: fullName,
+      phno: cleanPhone,
+      driverEmail: userEmail,
+      password: hashedPassword,
+      licenseNo: cleanLicense,
+      role: 'driver',
+      status: 'OFFLINE',
+      isAvailable: false,
+      isDeleted: false,
+      city: city ? String(city).trim() : 'Chennai',
+      state: state ? String(state).trim() : 'Tamil Nadu',
+      country: 'India'
+    });
+
+    return res.status(201).json({
+      success: true,
+      message: 'Driver account registered successfully! Please log in to become available.',
+      driver: {
+        driverId: newDriver.driverId,
+        driverName: newDriver.driverName,
+        phno: newDriver.phno,
+        driverEmail: newDriver.driverEmail,
+        status: newDriver.status,
+        isAvailable: newDriver.isAvailable
+      }
+    });
+  } catch (err: any) {
+    console.error('Driver Register Error:', err);
+    return res.status(500).json({
+      success: false,
+      message: 'Failed to register driver',
+      error: err.message
+    });
+  }
+};
+
+// 1. Driver Login (Direct, Secure, Dynamic)
+export const driverLogin = async (req: Request, res: Response) => {
+  try {
+    const { identifier, phone, email, phno, password } = req.body;
+    const loginId = String(identifier || phone || phno || email || '').trim();
+    const loginPass = String(password || '').trim();
+
+    if (!loginId || !loginPass) {
+      return res.status(400).json({
+
+        success: false,
+        message: 'Please provide mobile number / email and password.'
+      });
+    }
+
+    const numericPhone = loginId.replace(/[^0-9]/g, '');
+
+    const whereConditions: any[] = [
+      { driverEmail: loginId },
+      { phno: loginId }
+    ];
+    if (numericPhone.length >= 10) {
+      whereConditions.push({ phno: { [Op.like]: `%${numericPhone.slice(-10)}` } });
+    }
+
+    const driver = await Drivers.unscoped().findOne({
+      where: {
+        [Op.or]: whereConditions,
+        isDeleted: false
+      },
+      include: [
+        {
+          model: Vehicle,
+          as: 'vehicle',
+          required: false,
+          include: [{ model: VehicleMaster, as: 'vehicleMaster', required: false }]
+        },
+        { model: VehicleType, as: 'vehicleType', required: false }
+      ]
+    });
+
+    if (!driver) {
+      return res.status(401).json({
+        success: false,
+        message: 'Driver not found with this mobile number or email.'
+      });
+    }
+
+    let isMatch = false;
+    if (driver.password) {
+      try {
+        isMatch = await bcrypt.compare(loginPass, driver.password);
+      } catch {
+        isMatch = false;
+      }
+      if (!isMatch && driver.password === loginPass) {
+        isMatch = true;
+        const hashed = await bcrypt.hash(loginPass, 10);
+        await driver.update({ password: hashed }).catch(() => {});
+      }
+    }
+
+    if (!isMatch) {
+      return res.status(401).json({
+        success: false,
+        message: 'Invalid password. Please verify your credentials and try again.'
+      });
+    }
+
+    const activeTrip = await Booking.findOne({
+      where: {
+        driverId: driver.driverId,
+        confirmStatus: {
+          [Op.in]: ['TRIP_STARTED', 'Trip Started']
+        }
+      }
+    });
+
+
+    const now = new Date();
+    const loginStatus = activeTrip ? 'ON_TRIP' : 'AVAILABLE';
+
+    await driver.update({
+      status: loginStatus,
+      isAvailable: true,
+      role: 'driver',
+      lastLoginAt: now,
+      lastSeenAt: now
+    });
+
+    const token = Security.generateJwtToken(
+      {
+        userId: driver.driverId,
+        driverId: driver.driverId,
+        role: 'driver',
+        roles: 'driver',
+        name: driver.driverName,
+        phone: driver.phno,
+        email: driver.driverEmail
+      },
+      process.env.JWT_SECRET || 'supersecret',
+      '7d'
+    );
+
+    let vehicleNumber = (driver as any).vehicle?.vehicleMaster?.vehicleNumber || (driver as any).vehicle?.vehicleNumber;
+    if (!vehicleNumber && driver.vehicleId) {
+      const vm = await VehicleMaster.findOne({ where: { vehicleId: driver.vehicleId, isDeleted: false } });
+      if (vm) vehicleNumber = vm.vehicleNumber;
+    }
+    if (!vehicleNumber) vehicleNumber = 'Not Assigned';
+
+    const vehicleName = (driver as any).vehicle?.vehicleName || (driver as any).vehicleType?.vehicleType || 'Not Assigned';
+
+    return res.status(200).json({
+      success: true,
+      message: 'Driver login successful',
+      accessToken: token,
+      token,
+      role: 'driver',
+      roles: 'driver',
+      id: driver.driverId,
+      driverId: driver.driverId,
+      driver: {
+        driverId: driver.driverId,
+        driverName: driver.driverName,
+        phno: driver.phno,
+        driverEmail: driver.driverEmail,
+        licenseNo: driver.licenseNo,
+        status: loginStatus,
+        isAvailable: true,
+        vehicleName,
+        vehicleNumber,
+        vehicleId: driver.vehicleId,
+        activeTrip: activeTrip ? activeTrip.toJSON() : null
+      }
+    });
+  } catch (err: any) {
+    console.error('Driver Login Error:', err);
+    return res.status(500).json({
+      success: false,
+      message: 'Driver login failed due to server error',
+      error: err.message
+    });
+  }
+};
+
+// 2. Driver Logout
+export const driverLogout = async (req: AuthenticatedRequest, res: Response) => {
+  try {
+    const driverId = req.driverId || req.userId;
+    if (!driverId) {
+      return res.status(400).json({ success: false, message: 'Driver ID not found' });
+    }
+
+    await Drivers.unscoped().update(
+      {
+        status: 'OFFLINE',
+        isAvailable: false,
+        lastLogoutAt: new Date()
+      },
+      { where: { driverId } }
+    );
+
+    return res.status(200).json({
+      success: true,
+      message: 'Driver logged out successfully and marked OFFLINE'
+    });
+  } catch (err: any) {
+    return res.status(500).json({ success: false, error: err.message });
+  }
+};
+
+// 3. Get Authenticated Driver Profile (/driver/me)
+export const getDriverMe = async (req: AuthenticatedRequest, res: Response) => {
+  try {
+    const driverId = req.driverId || req.userId;
+    if (!driverId) {
+      return res.status(401).json({ success: false, message: 'Driver unauthorized' });
+    }
+
+    const driver = await Drivers.unscoped().findByPk(driverId, {
+      include: [
+        {
+          model: Vehicle,
+          as: 'vehicle',
+          required: false,
+          include: [{ model: VehicleMaster, as: 'vehicleMaster', required: false }]
+        },
+        { model: VehicleType, as: 'vehicleType', required: false }
+      ]
+    });
+
+    if (!driver) {
+      return res.status(404).json({ success: false, message: 'Driver not found' });
+    }
+
+    let vehicleNumber = (driver as any).vehicle?.vehicleMaster?.vehicleNumber || (driver as any).vehicle?.vehicleNumber;
+    if (!vehicleNumber && driver.vehicleId) {
+      const vm = await VehicleMaster.findOne({ where: { vehicleId: driver.vehicleId, isDeleted: false } });
+      if (vm) vehicleNumber = vm.vehicleNumber;
+    }
+    if (!vehicleNumber) vehicleNumber = 'Not Assigned';
+
+    const vehicleName = (driver as any).vehicle?.vehicleName || (driver as any).vehicleType?.vehicleType || 'Not Assigned';
+
+    const activeTrip = await Booking.findOne({
+      where: {
+        driverId,
+        confirmStatus: {
+          [Op.in]: ['TRIP_STARTED', 'Trip Started']
+        }
+      },
+      include: [
+        { model: User, as: 'user', required: false },
+        { model: Vehicle, as: 'vehicle', required: false }
+      ]
+    });
+
+    await driver.update({ lastSeenAt: new Date() }).catch(() => {});
+
+    return res.status(200).json({
+      success: true,
+      driver: {
+        ...driver.toJSON(),
+        vehicleName,
+        vehicleNumber,
+        activeTrip: activeTrip ? activeTrip.toJSON() : null
+      }
+    });
+  } catch (err: any) {
+    return res.status(500).json({ success: false, error: err.message });
+  }
+};
+
+// 4. Update Driver Availability (AVAILABLE / OFFLINE)
+export const updateDriverAvailability = async (req: AuthenticatedRequest, res: Response) => {
+  try {
+    const driverId = req.driverId || req.userId;
+    const { isAvailable, status } = req.body;
+
+    const driver = await Drivers.unscoped().findByPk(driverId);
+    if (!driver) {
+      return res.status(404).json({ success: false, message: 'Driver not found' });
+    }
+
+    const activeTrip = await Booking.findOne({
+      where: {
+        driverId,
+        confirmStatus: {
+          [Op.in]: ['TRIP_STARTED', 'Trip Started']
+        }
+      }
+    });
+
+
+    let newStatus = status;
+    let newIsAvailable = isAvailable;
+
+    if (typeof isAvailable === 'boolean') {
+      newStatus = isAvailable ? 'AVAILABLE' : 'OFFLINE';
+      newIsAvailable = isAvailable;
+    } else if (status) {
+      newStatus = status.toUpperCase();
+      newIsAvailable = newStatus === 'AVAILABLE';
+    }
+
+    if (activeTrip && newStatus === 'AVAILABLE') {
+      return res.status(400).json({
+        success: false,
+        message: 'Cannot toggle to Available while currently on an active trip.'
+      });
+    }
+
+    const finalStatus = activeTrip ? 'ON_TRIP' : newStatus;
+
+    await driver.update({
+      status: finalStatus,
+      isAvailable: newIsAvailable,
+      lastSeenAt: new Date()
+    });
+
+    return res.status(200).json({
+      success: true,
+      message: `Driver status updated to ${finalStatus}`,
+      status: finalStatus,
+      isAvailable: newIsAvailable
+    });
+  } catch (err: any) {
+    return res.status(500).json({ success: false, error: err.message });
+  }
+};
+
+// 5. Driver Heartbeat
+export const driverHeartbeat = async (req: AuthenticatedRequest, res: Response) => {
+  try {
+    const driverId = req.driverId || req.userId;
+    if (driverId) {
+      await Drivers.unscoped().update(
+        { lastSeenAt: new Date() },
+        { where: { driverId } }
+      );
+    }
+    return res.status(200).json({ success: true, timestamp: new Date() });
+  } catch (err: any) {
+    return res.status(500).json({ success: false, error: err.message });
+  }
+};
+
+// 6. Get Bookings for Authenticated Driver (/driver/my-bookings)
+export const getDriverBookings = async (req: AuthenticatedRequest, res: Response) => {
+  try {
+    const driverId = req.driverId || req.userId;
+    if (!driverId) {
+      return res.status(401).json({ success: false, message: 'Driver unauthorized' });
+    }
+
+    const bookings = await Booking.findAll({
+      where: {
+        driverId
+      },
+      include: [
+        { model: User, as: 'user', required: false },
+        {
+          model: Vehicle,
+          as: 'vehicle',
+          required: false,
+          include: [{ model: VehicleMaster, as: 'vehicleMaster', required: false }]
+        },
+        { model: VehicleType, as: 'vehicleType', required: false }
+      ],
+      order: [['bookingDate', 'DESC'], ['bookingTime', 'DESC']]
+    });
+
+    const vehicleMasters = await VehicleMaster.findAll({ where: { isDeleted: false } });
+    const vmByVehicleId = new Map<string, string>();
+    const vmByModelName = new Map<string, string>();
+    vehicleMasters.forEach((vm) => {
+      if (vm.vehicleId && vm.vehicleNumber) vmByVehicleId.set(vm.vehicleId, vm.vehicleNumber);
+      if (vm.vehicleModelName && vm.vehicleNumber) vmByModelName.set(vm.vehicleModelName.toLowerCase().trim(), vm.vehicleNumber);
+      if (vm.vehicleType && vm.vehicleNumber) vmByModelName.set(vm.vehicleType.toLowerCase().trim(), vm.vehicleNumber);
+    });
+
+    const enriched = bookings.map((b: any) => {
+      const bJson = b.toJSON();
+      const pref = (b.preferredType || b.vehicle?.vehicleName || '').toLowerCase().trim();
+      const regNumber = b.vehicle?.vehicleMaster?.vehicleNumber ||
+        (b.vehicleId ? vmByVehicleId.get(b.vehicleId) : null) ||
+        (pref ? vmByModelName.get(pref) : null) ||
+        'Not Added';
+
+      const vehName = b.vehicle?.vehicleName || b.preferredType || 'Standard Vehicle';
+
+      return {
+        ...bJson,
+        customerName: b.customerName || b.user?.username || b.riderName || 'Customer',
+        customerPhone: b.customerPhone || b.user?.phno || b.riderPhone || 'N/A',
+        vehicleName: vehName,
+        vehicleNumber: regNumber,
+        pickupLocation: b.pickupPoint,
+        dropLocation: b.dropPoint,
+        fare: b.totalFare || b.estimatedFare || b.finalFare || 0,
+        bookingCode: b.bookingCode || b.bookingId.slice(0, 8),
+        status: b.confirmStatus || b.bookingStatus || 'DRIVER_ASSIGNED'
+      };
+    });
+
+    const activeTrip = enriched.find((b) => ['TRIP_STARTED', 'Trip Started'].includes(String(b.confirmStatus)));
+    const assignedRides = enriched.filter((b) => ['DRIVER_ASSIGNED', 'Driver Assigned', '1', 1].includes(b.confirmStatus));
+    const completedRides = enriched.filter((b) => ['COMPLETED', 'Completed', '4', 4, 'PAYMENTCOMPLETED', '9', 9].includes(b.confirmStatus));
+
+    const todayStr = new Date().toISOString().split('T')[0];
+    const todayRides = assignedRides.filter((b) => String(b.bookingDate).includes(todayStr));
+    const upcomingRides = assignedRides.filter((b) => !String(b.bookingDate).includes(todayStr));
+
+    return res.status(200).json({
+      success: true,
+      data: {
+        all: enriched,
+        activeTrip: activeTrip || null,
+        assignedRides,
+        todayRides,
+        upcomingRides,
+        completedRides
+      }
+    });
+  } catch (err: any) {
+    console.error('Get Driver Bookings Error:', err);
+    return res.status(500).json({ success: false, error: err.message });
+  }
+};
+
+// 7. Start Trip (/driver/bookings/:bookingId/start)
+export const startDriverTrip = async (req: AuthenticatedRequest, res: Response) => {
+  try {
+    const driverId = req.driverId || req.userId;
+    const { bookingId } = req.params;
+
+    if (!driverId) {
+      return res.status(401).json({ success: false, message: 'Driver unauthorized' });
+    }
+
+    const booking = await Booking.findOne({
+      where: {
+        bookingId,
+        driverId
+      }
+    });
+
+    if (!booking) {
+      return res.status(404).json({
+        success: false,
+        message: 'Booking not found or not assigned to you.'
+      });
+    }
+
+    const existingActive = await Booking.findOne({
+      where: {
+        driverId,
+        bookingId: { [Op.ne]: bookingId },
+        confirmStatus: { [Op.in]: ['TRIP_STARTED', 'Trip Started'] }
+      }
+    });
+
+    if (existingActive) {
+      return res.status(400).json({
+        success: false,
+        message: `You already have an active ongoing trip (#${existingActive.bookingCode || existingActive.bookingId.slice(0, 8)}). Please complete it before starting a new trip.`
+      });
+    }
+
+    await booking.update({
+      confirmStatus: 'TRIP_STARTED',
+      bookingStatus: 'TRIP_STARTED',
+      driverTripStatus: 'TRIP_STARTED'
+    });
+
+    await Drivers.unscoped().update(
+      { status: 'ON_TRIP', lastSeenAt: new Date() },
+      { where: { driverId } }
+    );
+
+    return res.status(200).json({
+      success: true,
+      message: 'Trip started successfully!',
+      bookingCode: booking.bookingCode,
+      status: 'TRIP_STARTED',
+      driverStatus: 'ON_TRIP'
+    });
+  } catch (err: any) {
+    console.error('Start Trip Error:', err);
+    return res.status(500).json({ success: false, error: err.message });
+  }
+};
+
+// 8. Complete Trip (/driver/bookings/:bookingId/complete)
+export const completeDriverTrip = async (req: AuthenticatedRequest, res: Response) => {
+  try {
+    const driverId = req.driverId || req.userId;
+    const { bookingId } = req.params;
+    const { paymentMethod = 'CASH', amountPaid } = req.body;
+
+    if (!driverId) {
+      return res.status(401).json({ success: false, message: 'Driver unauthorized' });
+    }
+
+    const booking = await Booking.findOne({
+      where: {
+        bookingId,
+        driverId
+      }
+    });
+
+
+    if (!booking) {
+      return res.status(404).json({
+        success: false,
+        message: 'Booking not found or not assigned to you.'
+      });
+    }
+
+    const driver = await Drivers.unscoped().findByPk(driverId);
+    const newDriverStatus = driver?.isAvailable ? 'AVAILABLE' : 'OFFLINE';
+
+    const updates: any = {
+      confirmStatus: 'COMPLETED',
+      bookingStatus: 'COMPLETED',
+      driverTripStatus: 'TRIP_COMPLETED'
+    };
+
+    if (String(paymentMethod).toUpperCase() === 'CASH') {
+      updates.paymentStatus = 'PAID_CASH';
+      updates.paymentMethod = 'CASH';
+      if (amountPaid) updates.paidAmount = amountPaid;
+    }
+
+    await booking.update(updates);
+
+    await Drivers.unscoped().update(
+      { status: newDriverStatus, lastSeenAt: new Date() },
+      { where: { driverId } }
+    );
+
+    return res.status(200).json({
+      success: true,
+      message: 'Trip completed successfully!',
+      bookingCode: booking.bookingCode,
+      status: 'COMPLETED',
+      driverStatus: newDriverStatus
+    });
+  } catch (err: any) {
+    console.error('Complete Trip Error:', err);
+    return res.status(500).json({ success: false, error: err.message });
+  }
+};
+
+
 
 // 1. Create New Driver (with strict backend validations)
 export const createDriver = async (req: any, res: Response) => {
@@ -59,15 +723,19 @@ export const createDriver = async (req: any, res: Response) => {
     }
 
     const validStatus = ['AVAILABLE', 'ASSIGNED', 'ON_TRIP', 'OFFLINE'].includes(status) ? status : 'AVAILABLE';
+    const hashedPassword = req.body.password ? await bcrypt.hash(req.body.password, 10) : await bcrypt.hash(cleanPhone.slice(-6), 10);
 
     const newDriver = await Drivers.create({
       driverName: driverName.trim(),
       phno: cleanPhone,
+      password: hashedPassword,
+      role: 'driver',
       driverEmail: driverEmail ? driverEmail.trim() : null,
       licenseNo: cleanLicense,
       vehicleId: vehicleId || null,
       vehicleTypeId,
       status: validStatus,
+      isAvailable: validStatus === 'AVAILABLE',
       isDeleted: false,
       city: 'Chennai',
       state: 'Tamil Nadu',
@@ -96,7 +764,7 @@ export const createDriver = async (req: any, res: Response) => {
   }
 };
 
-// 2. Get All Drivers (with Search, Status Filter & Active Booking Detection)
+// 10. Get All Drivers (with Search, Live Dynamic Status & Vehicle Number)
 export const getAllDrivers = async (req: any, res: Response) => {
   try {
     const { status, search } = req.query;
@@ -125,7 +793,12 @@ export const getAllDrivers = async (req: any, res: Response) => {
     const drivers = await Drivers.unscoped().findAll({
       where: whereClause,
       include: [
-        { model: Vehicle, as: 'vehicle', required: false },
+        {
+          model: Vehicle,
+          as: 'vehicle',
+          required: false,
+          include: [{ model: VehicleMaster, as: 'vehicleMaster', required: false }]
+        },
         { model: VehicleType, as: 'vehicleType', required: false }
       ],
       order: [['createdAt', 'DESC']]
@@ -153,11 +826,38 @@ export const getAllDrivers = async (req: any, res: Response) => {
       }
     });
 
+    // Preload VehicleMaster map
+    const vehicleMasters = await VehicleMaster.findAll({ where: { isDeleted: false } });
+    const vmByVehicleId = new Map<string, string>();
+    vehicleMasters.forEach((vm) => {
+      if (vm.vehicleId && vm.vehicleNumber) vmByVehicleId.set(vm.vehicleId, vm.vehicleNumber);
+    });
+
     const enrichedDrivers = drivers.map((d) => {
       const json = d.toJSON();
       const currentBooking = activeBookingMap.get(d.driverId) || null;
+
+      // Compute dynamic live status
+      let dynamicStatus = d.status || 'AVAILABLE';
+      if (currentBooking) {
+        if (['TRIP_STARTED', 'Trip Started'].includes(currentBooking.confirmStatus)) {
+          dynamicStatus = 'ON_TRIP';
+        } else if (['DRIVER_ASSIGNED', 'Driver Assigned'].includes(currentBooking.confirmStatus)) {
+          dynamicStatus = 'ASSIGNED';
+        }
+      } else if (!d.isAvailable || d.status === 'OFFLINE') {
+        dynamicStatus = 'OFFLINE';
+      }
+
+      const vehicleNumber = (d as any).vehicle?.vehicleMaster?.vehicleNumber ||
+        (d.vehicleId ? vmByVehicleId.get(d.vehicleId) : null) ||
+        (d as any).vehicle?.vehicleNumber ||
+        'Not Assigned';
+
       return {
         ...json,
+        status: dynamicStatus,
+        vehicleNumber,
         currentBooking
       };
     });
@@ -172,6 +872,7 @@ export const getAllDrivers = async (req: any, res: Response) => {
     return res.status(500).json({ success: false, error: err.message });
   }
 };
+
 
 // 3. Get Driver by ID
 export const getDriverById = async (req: any, res: Response) => {

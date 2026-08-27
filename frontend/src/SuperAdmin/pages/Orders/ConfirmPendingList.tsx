@@ -624,42 +624,46 @@ const ConfirmPendingList: React.FC = () => {
                     Finding available chauffeurs...
                   </div>
                 ) : availableDrivers.length === 0 ? (
-                  <div className="p-4 rounded-2xl bg-rose-50 border border-rose-200 text-center text-xs font-bold text-rose-700">
-                    No chauffeurs currently AVAILABLE. All active drivers are on trips.
+                  <div className="p-4 rounded-2xl bg-amber-50 border border-amber-200 text-center text-xs font-bold text-amber-800">
+                    No chauffeurs are currently online and available. Drivers must log into the Driver Portal to appear here.
                   </div>
                 ) : (
                   <div className="space-y-2 max-h-48 overflow-y-auto">
-                    {availableDrivers.map((d) => (
-                      <label
-                        key={d.driverId}
-                        onClick={() => setSelectedDriverId(d.driverId)}
-                        className={`flex items-center justify-between p-3 rounded-2xl border-2 cursor-pointer transition-all ${
-                          selectedDriverId === d.driverId
-                            ? 'border-amber-500 bg-amber-50/40 text-slate-950 shadow-xs'
-                            : 'border-slate-200 hover:border-slate-300 text-slate-700'
-                        }`}
-                      >
-                        <div className="flex items-center gap-2.5">
-                          <div className="w-8 h-8 rounded-full bg-slate-900 text-amber-400 flex items-center justify-center font-bold text-xs">
-                            {d.driverName.charAt(0)}
+                    {availableDrivers.map((d: any) => {
+                      const vehNumber = d.vehicleNumber || d.vehicle?.vehicleNo || d.vehicle?.vehicleNumber;
+                      return (
+                        <label
+                          key={d.driverId}
+                          onClick={() => setSelectedDriverId(d.driverId)}
+                          className={`flex items-center justify-between p-3 rounded-2xl border-2 cursor-pointer transition-all ${
+                            selectedDriverId === d.driverId
+                              ? 'border-amber-500 bg-amber-50/40 text-slate-950 shadow-xs'
+                              : 'border-slate-200 hover:border-slate-300 text-slate-700'
+                          }`}
+                        >
+                          <div className="flex items-center gap-2.5">
+                            <div className="w-8 h-8 rounded-full bg-slate-900 text-amber-400 flex items-center justify-center font-bold text-xs">
+                              {d.driverName.charAt(0)}
+                            </div>
+                            <div>
+                              <span className="font-extrabold text-xs block text-slate-900">
+                                {d.driverName}
+                              </span>
+                              <span className="text-[10px] text-slate-500 font-mono">
+                                {d.phno} {vehNumber && vehNumber !== 'Not Added' ? `· ${vehNumber}` : ''}
+                              </span>
+                            </div>
                           </div>
-                          <div>
-                            <span className="font-extrabold text-xs block text-slate-900">
-                              {d.driverName}
-                            </span>
-                            <span className="text-[10px] text-slate-400 font-mono">
-                              {d.phno} {d.vehicle?.vehicleNo ? `· ${d.vehicle.vehicleNo}` : ''}
-                            </span>
-                          </div>
-                        </div>
 
-                        <span className="px-2 py-0.5 rounded-full bg-emerald-100 text-emerald-800 text-[10px] font-black uppercase">
-                          Available
-                        </span>
-                      </label>
-                    ))}
+                          <span className="px-2 py-0.5 rounded-full bg-emerald-100 text-emerald-800 text-[10px] font-black uppercase flex items-center gap-1">
+                            <span className="w-1.5 h-1.5 rounded-full bg-emerald-500" /> Available
+                          </span>
+                        </label>
+                      );
+                    })}
                   </div>
                 )}
+
               </div>
 
               {/* Submit CTA */}

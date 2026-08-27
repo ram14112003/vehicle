@@ -147,6 +147,10 @@ import OnCallInvoiceView from './SuperAdmin/pages/Orders/view/Oncallinvoiceview'
 import BookingPage from './pages/BookingPage';
 import MyBookings from './pages/MyBookings';
 import BookingSuccess from './pages/BookingSuccess';
+import DriverLogin from './SuperAdmin/pages/Login/DriverLogin';
+import DriverRegister from './SuperAdmin/pages/Login/DriverRegister';
+import DriverDashboard from './pages/DriverDashboard';
+import DriverProtectedRoute from './routes/DriverProtectedRoute';
 
 
 const Layout = () => {
@@ -154,13 +158,14 @@ const Layout = () => {
 
   return (
     <div className="flex min-h-screen bg-slate-50">
-      {role !== "user" && role !== "manager" && <Sidebar />}
+      {role !== "user" && role !== "manager" && role !== "driver" && <Sidebar />}
       <AlertContainer />
       <main
         className={`flex-1 bg-slate-50 min-h-screen overflow-auto ${
-          role !== "user" && role !== "manager" ? "ml-64" : ""
+          role !== "user" && role !== "manager" && role !== "driver" ? "ml-64" : ""
         }`}
       >
+
         {role === "manager" ? <TravelHeader /> : <Header />}
 
 
@@ -286,7 +291,31 @@ const App: React.FC = () => {
           <Route path="/adminlogin" element={<Login />} />
           <Route path="/forgetpasword" element={<ForgotPassword />} />
 
+          {/* Dedicated Driver Authentication & Dashboard Routes */}
+          <Route path="/driver/register" element={<DriverRegister />} />
+          <Route path="/driver-register" element={<DriverRegister />} />
+          <Route path="/driver/login" element={<DriverLogin />} />
+          <Route path="/driver-login" element={<DriverLogin />} />
+
+          <Route
+            path="/driver/dashboard"
+            element={
+              <DriverProtectedRoute>
+                <DriverDashboard />
+              </DriverProtectedRoute>
+            }
+          />
+          <Route
+            path="/driver-dashboard"
+            element={
+              <DriverProtectedRoute>
+                <DriverDashboard />
+              </DriverProtectedRoute>
+            }
+          />
+
           <Route path="/managerusers/list/:id" element={<ManagerUserList />} />
+
           <Route path="/users/userviewdetails/:userId" element={<UserViewDetails />} />
          <Route path="/Company/:seoUrl" element={<UserLogin />} />
 

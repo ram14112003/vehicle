@@ -250,8 +250,22 @@ className="w-full bg-gradient-to-r from-[#274782] to-[#352E6B] text-white py-3.5
                   Forgot your password?
                 </button>
               </div>
+
+              {/* Driver Portal Link */}
+              <div className="mt-6 pt-4 border-t border-gray-100 text-center">
+                <p className="text-xs text-gray-500">
+                  Are you an EasyRide Cab Driver?{" "}
+                  <a
+                    href="/driver/login"
+                    className="font-bold text-amber-600 hover:text-amber-700 hover:underline block sm:inline mt-1 sm:mt-0"
+                  >
+                    Driver Login Portal →
+                  </a>
+                </p>
+              </div>
             </form>
           </div>
+
 
           {/* Footer text */}
           <p className="text-center text-sm text-gray-500 mt-6">

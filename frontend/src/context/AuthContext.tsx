@@ -23,12 +23,15 @@ type AuthContextType = {
 const AuthContext = createContext<AuthContextType | undefined>(undefined);
 
 export const AuthProvider = ({ children }: { children: ReactNode }) => {
-  const [token, setToken] = useState<string | null>(() => localStorage.getItem('token') || localStorage.getItem('accessToken') || null);
+  const [token, setToken] = useState<string | null>(() => {
+    const t = localStorage.getItem('token') || localStorage.getItem('accessToken');
+    return (t && t !== 'null' && t !== 'undefined') ? t.trim() : null;
+  });
   
   const [user, setUser] = useState<UserProfile | null>(() => {
     try {
       const stored = localStorage.getItem('user');
-      if (stored) return JSON.parse(stored);
+      if (stored && stored !== 'undefined' && stored !== 'null') return JSON.parse(stored);
       
       const userId = localStorage.getItem('userId');
       const username = localStorage.getItem('username');
@@ -55,14 +58,18 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
     return null;
   });
 
-  const [isAuthenticated, setIsAuthenticated] = useState<boolean>(!!token);
+  const [isAuthenticated, setIsAuthenticated] = useState<boolean>(() => {
+    const t = localStorage.getItem('token') || localStorage.getItem('accessToken');
+    return !!(t && t !== 'null' && t !== 'undefined');
+  });
 
   useEffect(() => {
-    setIsAuthenticated(!!token);
+    setIsAuthenticated(!!(token && token !== 'null' && token !== 'undefined'));
   }, [token]);
 
   const login = (newToken?: string, userData?: any) => {
-    const t = newToken || localStorage.getItem('token') || localStorage.getItem('accessToken') || '';
+    const raw = newToken || localStorage.getItem('token') || localStorage.getItem('accessToken') || '';
+    const t = (raw && raw !== 'null' && raw !== 'undefined') ? raw.trim() : '';
     
     let u: UserProfile;
     if (userData) {
@@ -78,8 +85,19 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
       };
     } else {
       const stored = localStorage.getItem('user');
-      if (stored) {
-        u = JSON.parse(stored);
+      if (stored && stored !== 'undefined' && stored !== 'null') {
+        try {
+          u = JSON.parse(stored);
+        } catch {
+          u = {
+            userId: localStorage.getItem('userId') || '',
+            username: localStorage.getItem('username') || 'User',
+            email: localStorage.getItem('email') || '',
+            mobile: localStorage.getItem('mobile') || '',
+            role: localStorage.getItem('role') || 'user',
+            companyId: localStorage.getItem('companyId') || null,
+          };
+        }
       } else {
         u = {
           userId: localStorage.getItem('userId') || '',
@@ -92,13 +110,13 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
       }
     }
 
-    setToken(t);
+    setToken(t || null);
     setUser(u);
-    setIsAuthenticated(true);
+    setIsAuthenticated(!!(t && t !== 'null' && t !== 'undefined'));
 
-    if (newToken) {
-      localStorage.setItem('token', newToken);
-      localStorage.setItem('accessToken', newToken);
+    if (t) {
+      localStorage.setItem('token', t);
+      localStorage.setItem('accessToken', t);
     }
     localStorage.setItem('user', JSON.stringify(u));
     if (u.userId) localStorage.setItem('userId', u.userId);
@@ -108,6 +126,7 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
     if (u.role) localStorage.setItem('role', u.role);
     if (u.companyId) localStorage.setItem('companyId', u.companyId);
   };
+
 
 
   const logout = () => {

@@ -248,6 +248,15 @@ export const BookingFlow: React.FC = () => {
       return;
     }
 
+    const rawToken = localStorage.getItem("token") || localStorage.getItem("accessToken");
+    const token = (rawToken && rawToken !== "null" && rawToken !== "undefined") ? rawToken.trim() : null;
+
+    if (!token || !isAuthenticated) {
+      showToast("Please sign in or create an account to confirm your booking", "info");
+      setAuthModalOpen(true);
+      return;
+    }
+
     setSubmittingBooking(true);
 
     try {
@@ -277,7 +286,13 @@ export const BookingFlow: React.FC = () => {
         vehicleId: selectedVehicle.vehicleId || null
       };
 
-      const res = await axiosInstance.post("/emp/createBookingForWeb", payload);
+      const cleanToken = token.startsWith("Bearer ") ? token.slice(7).trim() : token;
+
+      const res = await axiosInstance.post("/emp/createBookingForWeb", payload, {
+        headers: {
+          Authorization: `Bearer ${cleanToken}`
+        }
+      });
 
       if (res.data?.success && res.data?.booking) {
         const bk = res.data.booking;
@@ -307,12 +322,18 @@ export const BookingFlow: React.FC = () => {
       }
     } catch (err: any) {
       console.error("Booking submission error:", err);
-      const msg = err.response?.data?.message || err.message || "Failed to confirm booking. Please try again.";
-      showToast(msg, "error");
+      if (err.response?.status === 401) {
+        showToast("Session expired or unauthorized. Please sign in again.", "error");
+        setAuthModalOpen(true);
+      } else {
+        const msg = err.response?.data?.message || err.message || "Failed to confirm booking. Please try again.";
+        showToast(msg, "error");
+      }
     } finally {
       setSubmittingBooking(false);
     }
   };
+
 
 
   return (
@@ -880,12 +901,22 @@ export const BookingFlow: React.FC = () => {
         isOpen={authModalOpen}
         onClose={() => setAuthModalOpen(false)}
         onSuccess={() => {
-          if (user) {
-            setRiderName(user.username || user.name || "");
-            setRiderPhone(user.mobile || "");
+          setAuthModalOpen(false);
+          const rawUser = localStorage.getItem("user");
+          if (rawUser) {
+            try {
+              const u = JSON.parse(rawUser);
+              if (!riderName) setRiderName(u.username || u.name || "");
+              if (!riderPhone) setRiderPhone(u.mobile || u.phno || "");
+            } catch (e) {}
+          } else if (user) {
+            if (!riderName) setRiderName(user.username || user.name || "");
+            if (!riderPhone) setRiderPhone(user.mobile || "");
           }
+          showToast("Signed in! You can now confirm your booking.", "success");
         }}
       />
+
 
     </div>
   );

@@ -13,11 +13,20 @@ const axiosInstance = axios.create({
 
 axiosInstance.interceptors.request.use(
   (req) => {
-    const token = localStorage.getItem('token');
-    if (token && req.headers) {
-      req.headers['Authorization'] = `Bearer ${token}`;
+    const rawToken = localStorage.getItem('token') || localStorage.getItem('accessToken');
+    if (rawToken && rawToken !== 'null' && rawToken !== 'undefined') {
+      const cleanToken = rawToken.startsWith('Bearer ') ? rawToken.slice(7).trim() : rawToken.trim();
+      if (cleanToken) {
+        if (!req.headers) {
+          req.headers = {} as any;
+        }
+        req.headers['Authorization'] = `Bearer ${cleanToken}`;
+      }
     }
     return req;
   },
+  (error) => {
+    return Promise.reject(error);
+  }
 );
-export default axiosInstance;
+export default axiosInstance;
